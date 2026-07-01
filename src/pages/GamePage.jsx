@@ -177,7 +177,7 @@ function DiscardPool({ discardPool, lastDiscard, landscape }) {
       padding:    '8px 10px',
       overflowY:  'auto',
       borderBottom: `1px solid ${C.border}`,
-      minHeight:  landscape ? 90 : 130,  // ~2 rows of md tiles (42px each) + label + padding
+      minHeight:  landscape ? 110 : 150,  // ~2 rows of lg tiles (59px each) + label + padding
     }}>
       <div style={{ fontSize: FS.xxs, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         Discard pool
@@ -189,11 +189,11 @@ function DiscardPool({ discardPool, lastDiscard, landscape }) {
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'flex-end' }}>
           {grouped.map(({ tileId, base, count }) => (
-            <MahjongTile key={base} tileId={tileId} size="md" count={count} />
+            <MahjongTile key={base} tileId={tileId} size="lg" count={count} />
           ))}
           {lastIsInPool && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <MahjongTile tileId={lastTileId} size="lg" highlighted />
+              <MahjongTile tileId={lastTileId} size="xl" highlighted />
               <span style={{ fontSize: FS.xxs, color: C.red, fontWeight: 700 }}>最新</span>
             </div>
           )}
@@ -702,6 +702,10 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
     return char ? `${char} ${word}` : type
   }
 
+  const Y      = '#ffd700'           // yellow for all text
+  const Y_DIM  = 'rgba(255,215,0,0.45)'  // dimmed yellow for pass / discarder
+  const Y_MID  = 'rgba(255,215,0,0.7)'   // mid yellow for non-winner names
+
   return (
     <div style={{
       position:      'fixed',
@@ -712,29 +716,29 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
       pointerEvents: 'none',
     }}>
       <div style={{
-        background:    C.card,
-        border:        `1px solid ${C.border}`,
+        background:    '#1a2a4a',
+        border:        `2px solid ${Y}`,
         borderRadius:  14,
         padding:       '16px 18px',
-        minWidth:      IS_MOBILE ? 260 : 230,
-        maxWidth:      320,
+        minWidth:      IS_MOBILE ? 270 : 240,
+        maxWidth:      330,
         display:       'flex',
         flexDirection: 'column',
         gap:           10,
-        boxShadow:     '0 8px 32px rgba(0,0,0,0.65)',
-        opacity:       0.96,
+        boxShadow:     '0 8px 32px rgba(0,0,0,0.7)',
       }}>
         {isAllPass ? (
-          <div style={{ textAlign: 'center', color: C.muted, fontSize: FS.base }}>
+          <div style={{ textAlign: 'center', color: Y, fontSize: FS.base, fontWeight: 600 }}>
             {t(lang, 'allPassed')} — {WIND_CHAR[winnerSeat]} {t(lang, 'draw')}
           </div>
         ) : (
           <>
             <div style={{
               fontSize:      FS.xxs,
-              color:         C.dim,
+              color:         Y,
               textTransform: 'uppercase',
-              letterSpacing: '0.08em',
+              letterSpacing: '0.1em',
+              fontWeight:    700,
             }}>
               {t(lang, 'claimResult')}
             </div>
@@ -743,43 +747,43 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
               const isDiscarder = wind === discardedBy
               const claim       = isDiscarder ? null : (claims[wind] ?? null)
               const isWinner    = wind === winnerSeat
+              const isClaim     = !isDiscarder && claim?.type && claim.type !== 'pass'
 
               return (
                 <div key={wind} style={{
-                  display:       'flex',
-                  alignItems:    'center',
-                  gap:           10,
-                  padding:       '6px 10px',
-                  borderRadius:  8,
-                  background:    isWinner
-                    ? 'rgba(212,160,23,0.15)'
-                    : 'rgba(255,255,255,0.03)',
-                  border:        `1px solid ${isWinner ? C.gold : C.border}`,
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          10,
+                  padding:      '6px 10px',
+                  borderRadius: 8,
+                  background:   isWinner ? 'rgba(255,215,0,0.12)' : 'rgba(255,255,255,0.03)',
+                  border:       `1px solid ${isWinner ? Y : 'rgba(255,215,0,0.2)'}`,
                 }}>
                   {/* Wind badge */}
                   <div style={{
-                    width:           28,
-                    height:          28,
-                    borderRadius:    4,
-                    background:      isWinner ? 'rgba(212,160,23,0.25)' : C.darker,
-                    display:         'flex',
-                    alignItems:      'center',
-                    justifyContent:  'center',
-                    fontSize:        FS.sm,
-                    fontWeight:      700,
-                    color:           isWinner ? C.gold : C.muted,
-                    flexShrink:      0,
+                    width:          28,
+                    height:         28,
+                    borderRadius:   4,
+                    background:     isWinner ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.06)',
+                    display:        'flex',
+                    alignItems:     'center',
+                    justifyContent: 'center',
+                    fontSize:       FS.sm,
+                    fontWeight:     700,
+                    color:          isWinner ? Y : Y_MID,
+                    flexShrink:     0,
                   }}>
                     {WIND_CHAR[wind]}
                   </div>
 
                   {/* Name */}
                   <div style={{
-                    flex:       1,
-                    fontSize:   FS.sm,
-                    color:      isWinner ? C.text : C.muted,
-                    overflow:   'hidden',
-                    whiteSpace: 'nowrap',
+                    flex:         1,
+                    fontSize:     FS.sm,
+                    fontWeight:   isWinner ? 700 : 400,
+                    color:        isWinner ? Y : Y_MID,
+                    overflow:     'hidden',
+                    whiteSpace:   'nowrap',
                     textOverflow: 'ellipsis',
                   }}>
                     {room.seats?.[wind]?.name ?? WIND_LABEL[wind]}
@@ -788,14 +792,8 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
                   {/* Claim label */}
                   <div style={{
                     fontSize:   FS.sm,
-                    fontWeight: isWinner ? 700 : 400,
-                    color:      isWinner
-                      ? C.gold
-                      : isDiscarder
-                        ? C.dim
-                        : claim?.type === 'pass' || !claim
-                          ? C.dim
-                          : C.text,
+                    fontWeight: isWinner || isClaim ? 700 : 400,
+                    color:      isWinner || isClaim ? Y : Y_DIM,
                     flexShrink: 0,
                   }}>
                     {isDiscarder

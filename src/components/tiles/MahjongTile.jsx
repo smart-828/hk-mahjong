@@ -3,10 +3,11 @@
 // Each tile: cream background (#f5f2e8) + 8px left colour strip.
 //
 // Sizes
-//   lg   44 × 59   (featured / selected display)
+//   xl   66 × 88   (last-discard highlight)
+//   lg   44 × 59   (discard pool + player's own hand)
 //   sm   42 × 55   (player's own hand — main tap targets)
 //   opp  34 × 46   (opponent exposed melds + flowers)
-//   md   31 × 42   (discard pool, compact melds)
+//   md   31 × 42   (compact melds)
 //
 // tileId='back' renders a face-down tile.
 
@@ -14,6 +15,7 @@ import { tileBase } from '../../engine/tiles.js'
 
 // ── Tile dimensions ───────────────────────────────────────────
 const SIZES = {
+  xl:  { w: 66, h: 88, fs1: 36, fs2: 32, fsX: 14 },  // last-discard highlight
   lg:  { w: 44, h: 59, fs1: 24, fs2: 21, fsX: 10 },  // fs1=honour, fs2=wan chars, fsX=bonus label
   sm:  { w: 42, h: 55, fs1: 22, fs2: 19, fsX: 9  },
   opp: { w: 34, h: 46, fs1: 18, fs2: 16, fsX: 8  },  // opponent exposed melds
