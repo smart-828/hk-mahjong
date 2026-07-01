@@ -12,6 +12,16 @@ git add -A && git commit -m '[description of what was built]' && git push origin
 
 Never leave work uncommitted.
 
+## Testing rule
+
+After building any game logic module, immediately write unit tests for it before moving to the next feature. Tests go in `src/engine/engine.test.js` and must be run with:
+
+```bash
+node src/engine/engine.test.js
+```
+
+All tests must pass before proceeding. Never build UI on top of untested game logic.
+
 ## Commands
 
 ```bash
