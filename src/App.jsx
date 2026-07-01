@@ -45,15 +45,20 @@ export default function App() {
     if (!user) return
     const unsub = subscribeToUserRooms(user.uid, rooms => {
       setActiveGames(rooms.map(r => {
-        const myW    = Object.entries(r.seats ?? {}).find(([, s]) => s.uid === user.uid)?.[0]
+        const myW      = Object.entries(r.seats ?? {}).find(([, s]) => s.uid === user.uid)?.[0]
         const yourTurn = r.status === 'playing' && r.hand?.currentTurn === myW
+        const isHost   = r.hostUid === user.uid
         return {
-          id:        r.id,
-          roomCode:  r.roomCode,
-          players:   Object.values(r.seats).filter(s => s.type === 'human').length,
+          id:       r.id,
+          roomCode: r.roomCode,
+          players:  Object.values(r.seats).filter(s => s.type === 'human').length,
           tilesLeft: r.hand?.tilesLeft ?? '—',
+          status:   r.status,
           yourTurn,
-          onOpen:    () => openRoom(r),
+          isHost,
+          onOpen:   () => openRoom(r),
+          onDelete: isHost   ? () => deleteRoom(r.id).catch(console.error) : null,
+          onLeave:  !isHost && myW ? () => leaveRoom(r.id, myW).catch(console.error) : null,
         }
       }))
     })

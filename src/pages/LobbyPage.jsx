@@ -253,10 +253,8 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
                 style={S.gameCard}
                 onClick={() => game.onOpen()}
               >
-                <div>
-                  <div style={S.gameCardTitle}>
-                    Room {game.roomCode}
-                  </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={S.gameCardTitle}>Room {game.roomCode}</div>
                   <div style={S.gameCardMeta}>
                     {game.players} players · {game.tilesLeft} tiles left
                   </div>
@@ -264,9 +262,55 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
                 <span style={{
                   ...S.badge,
                   ...(game.yourTurn ? S.badgeYourTurn : S.badgeWaiting),
+                  marginRight: 6,
                 }}>
                   {game.yourTurn ? t(lang, 'yourTurn') : t(lang, 'waitingFor') + '…'}
                 </span>
+                {game.onDelete && (
+                  <button
+                    style={{
+                      background:   'transparent',
+                      border:       '1px solid #c0392b66',
+                      color:        '#c0392b',
+                      borderRadius: 5,
+                      padding:      '3px 7px',
+                      fontSize:     13,
+                      cursor:       'pointer',
+                      flexShrink:   0,
+                    }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
+                      if (window.confirm(msg)) game.onDelete()
+                    }}
+                    title="Delete room"
+                  >
+                    🗑
+                  </button>
+                )}
+                {game.onLeave && (
+                  <button
+                    style={{
+                      background:   'transparent',
+                      border:       '1px solid #e67e2266',
+                      color:        '#e67e22',
+                      borderRadius: 5,
+                      padding:      '3px 8px',
+                      fontSize:     11,
+                      fontWeight:   600,
+                      cursor:       'pointer',
+                      flexShrink:   0,
+                    }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
+                      if (window.confirm(msg)) game.onLeave()
+                    }}
+                    title="Leave room"
+                  >
+                    {lang === 'zh' ? '離開' : 'Leave'}
+                  </button>
+                )}
               </div>
             ))
           )}
