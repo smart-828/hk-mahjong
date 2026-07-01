@@ -42,6 +42,18 @@ No linter is configured.
 
 Copy `.env.example` to `.env` and fill in Firebase project credentials. All variables are prefixed `VITE_FIREBASE_`.
 
+The following environment variables must also be set — in `.env` for local dev and in the **Vercel project settings** (Settings → Environment Variables) for production deployments:
+
+| Variable | Purpose |
+|---|---|
+| `VITE_FIREBASE_API_KEY` | Firebase API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `VITE_ACCESS_CODE` | Registration access code (controls who can create accounts). Change this anytime in Vercel and redeploy to rotate it. |
+
 ## Architecture
 
 React + Vite SPA. No TypeScript — plain `.jsx`. No CSS files — all styling is done with inline JS style objects defined as `const S = { ... }` at the top of each component file.

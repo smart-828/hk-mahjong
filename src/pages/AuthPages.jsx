@@ -121,16 +121,24 @@ const styles = {
 
 // ── Login Page ────────────────────────────────────────────────
 export function LoginPage({ onSignInGoogle, onSignInEmail, onCreateAccount, error }) {
-  const [mode, setMode]         = useState('login') // 'login' | 'register'
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName]         = useState('')
+  const [mode, setMode]           = useState('login') // 'login' | 'register'
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [name, setName]           = useState('')
+  const [accessCode, setAccessCode] = useState('')
+  const [codeError, setCodeError] = useState('')
 
   function handleSubmit(e) {
     e.preventDefault()
     if (mode === 'login') {
       onSignInEmail(email, password)
     } else {
+      const expected = (import.meta.env.VITE_ACCESS_CODE ?? '').trim()
+      if (expected && accessCode.trim().toLowerCase() !== expected.toLowerCase()) {
+        setCodeError('Invalid access code / 通行碼不正確')
+        return
+      }
+      setCodeError('')
       onCreateAccount(email, password, name)
     }
   }
@@ -192,6 +200,19 @@ export function LoginPage({ onSignInGoogle, onSignInEmail, onCreateAccount, erro
             onChange={e => setPassword(e.target.value)}
             required
           />
+          {mode === 'register' && (
+            <>
+              <label style={styles.label}>Access Code / 通行碼</label>
+              <input
+                style={styles.input}
+                placeholder="Enter access code / 輸入通行碼"
+                value={accessCode}
+                onChange={e => { setAccessCode(e.target.value); setCodeError('') }}
+                required
+              />
+              {codeError && <div style={styles.error}>{codeError}</div>}
+            </>
+          )}
           <button type="submit" style={{ ...styles.btn, ...styles.btnPrimary }}>
             {mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
@@ -199,7 +220,7 @@ export function LoginPage({ onSignInGoogle, onSignInEmail, onCreateAccount, erro
 
         <div
           style={styles.link}
-          onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setCodeError('') }}
         >
           {mode === 'login' ? 'No account? Create one' : 'Already have an account? Sign in'}
         </div>
