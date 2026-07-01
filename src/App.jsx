@@ -11,7 +11,7 @@ import RoomPage from './pages/RoomPage'
 import GamePage from './pages/GamePage'
 import {
   createRoom, joinRoom, claimSeat,
-  setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom,
+  setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom, deleteUserStaleRooms,
   subscribeToRoom, subscribeToUserRooms,
 } from './firebase/rooms'
 import { startGame } from './firebase/game'
@@ -142,6 +142,17 @@ export default function App() {
     }
   }
 
+  async function handleCleanupRooms() {
+    if (!user?.uid) return
+    try {
+      const count = await deleteUserStaleRooms(user.uid)
+      return count
+    } catch (err) {
+      console.error('Cleanup rooms error:', err)
+      return 0
+    }
+  }
+
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return (
@@ -189,7 +200,15 @@ export default function App() {
           myWind={myWind}
           game={game}
           lang={lang}
-          onBack={() => setPage('lobby')}
+          onBack={() => {
+            const roomId = currentRoom?.id
+            const phase  = currentRoom?.hand?.phase
+            setCurrentRoom(null)
+            setPage('lobby')
+            if (roomId && (phase === 'finished' || phase === 'exhausted')) {
+              deleteRoom(roomId).catch(console.error)
+            }
+          }}
         />
       )
     }
@@ -230,6 +249,7 @@ export default function App() {
       onJoinRoom={handleJoinRoom}
       onSignOut={signOut}
       activeGames={activeGames}
+      onCleanupRooms={handleCleanupRooms}
       onOpenLeaderboard={() => setPage('leaderboard')}
     />
   )

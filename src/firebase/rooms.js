@@ -151,6 +151,16 @@ export async function deleteRoom(roomId) {
   await deleteDoc(doc(db, 'rooms', roomId))
 }
 
+// Delete all waiting/finished rooms where the user is the host
+export async function deleteUserStaleRooms(uid) {
+  const snap = await getDocs(
+    query(collection(db, 'rooms'), where('status', 'in', ['waiting', 'finished']))
+  )
+  const stale = snap.docs.filter(d => d.data().hostUid === uid)
+  await Promise.all(stale.map(d => deleteDoc(doc(db, 'rooms', d.id))))
+  return stale.length
+}
+
 // Leave a room — replaces the player's seat with an AI and returns them to lobby
 export async function leaveRoom(roomId, wind) {
   await updateDoc(doc(db, 'rooms', roomId), {
