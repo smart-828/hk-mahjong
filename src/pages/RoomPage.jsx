@@ -1,189 +1,242 @@
 // ── Room Page ─────────────────────────────────────────────────
 // Lobby for a specific room: seat selection, settings, start game
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { t } from '../i18n/translations'
 
-const WINDS  = ['east', 'south', 'west', 'north']
+const WINDS      = ['east', 'south', 'west', 'north']
 const WIND_CHARS = { east: '東', south: '南', west: '西', north: '北' }
-const AI_LEVELS = ['aiEasy', 'aiMedium', 'aiHard']
+const AI_LEVELS  = ['aiEasy', 'aiMedium', 'aiHard']
+
+const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth <= 480
 
 const S = {
   page: {
-    minHeight: '100vh',
+    height:     '100vh',
+    overflowY:  'auto',
     background: '#1a1a2e',
-    color: '#f5f2e8',
+    color:      '#f5f2e8',
     fontFamily: '-apple-system, sans-serif',
+    position:   'relative',
   },
   header: {
-    background: '#16213e',
-    padding: '14px 20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
+    background:   '#16213e',
+    padding:      IS_MOBILE ? '18px 24px' : '14px 20px',
+    display:      'flex',
+    alignItems:   'center',
+    gap:          12,
     borderBottom: '1px solid #2a2a4e',
   },
   backBtn: {
     background: 'none',
-    border: 'none',
-    color: '#888',
-    fontSize: 20,
-    cursor: 'pointer',
-    padding: 0,
+    border:     'none',
+    color:      '#888',
+    fontSize:   IS_MOBILE ? 40 : 20,
+    cursor:     'pointer',
+    padding:    0,
   },
-  headerTitle: { fontSize: 16, fontWeight: 700, color: '#f5f2e8' },
-  roomCode: {
-    marginLeft: 'auto',
-    background: '#c0392b',
-    color: '#fff',
-    padding: '4px 12px',
-    borderRadius: 6,
-    fontSize: 16,
+  headerTitle: {
+    fontSize:   IS_MOBILE ? 32 : 16,
     fontWeight: 700,
+    color:      '#f5f2e8',
+  },
+  roomCode: {
+    marginLeft:    'auto',
+    background:    '#c0392b',
+    color:         '#fff',
+    padding:       IS_MOBILE ? '6px 16px' : '4px 12px',
+    borderRadius:  6,
+    fontSize:      IS_MOBILE ? 32 : 16,
+    fontWeight:    700,
     letterSpacing: '0.15em',
   },
-  body: { padding: 16, maxWidth: 480, margin: '0 auto' },
+  body: {
+    padding:  IS_MOBILE ? '18px 16px' : 16,
+    maxWidth: 480,
+    margin:   '0 auto',
+  },
   card: {
-    background: '#16213e',
+    background:   '#16213e',
     borderRadius: 12,
-    padding: 16,
+    padding:      IS_MOBILE ? 20 : 16,
     marginBottom: 14,
-    border: '1px solid #2a2a4e',
+    border:       '1px solid #2a2a4e',
   },
   cardTitle: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: '#888',
+    fontSize:      IS_MOBILE ? 22 : 12,
+    fontWeight:    600,
+    color:         '#888',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    marginBottom: 12,
+    marginBottom:  IS_MOBILE ? 16 : 12,
   },
   seatRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '10px 0',
+    display:      'flex',
+    alignItems:   'center',
+    gap:          IS_MOBILE ? 14 : 10,
+    padding:      IS_MOBILE ? '14px 0' : '10px 0',
     borderBottom: '1px solid #1a1a3e',
   },
   windBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    background: '#0d1b2a',
-    display: 'flex',
-    alignItems: 'center',
+    width:          IS_MOBILE ? 56 : 36,
+    height:         IS_MOBILE ? 56 : 36,
+    borderRadius:   6,
+    background:     '#0d1b2a',
+    display:        'flex',
+    alignItems:     'center',
     justifyContent: 'center',
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#f5f2e8',
-    flexShrink: 0,
+    fontSize:       IS_MOBILE ? 30 : 18,
+    fontWeight:     700,
+    color:          '#f5f2e8',
+    flexShrink:     0,
   },
-  seatName: { flex: 1, fontSize: 14, color: '#ccc' },
+  seatName: {
+    flex:     1,
+    fontSize: IS_MOBILE ? 26 : 14,
+    color:    '#ccc',
+  },
   seatControl: { marginLeft: 'auto' },
   select: {
-    background: '#0d1b2a',
-    color: '#ccc',
-    border: '1px solid #2a2a4e',
+    background:   '#0d1b2a',
+    color:        '#ccc',
+    border:       '1px solid #2a2a4e',
     borderRadius: 6,
-    padding: '5px 8px',
-    fontSize: 13,
-    cursor: 'pointer',
-    outline: 'none',
+    padding:      IS_MOBILE ? '10px 14px' : '5px 8px',
+    fontSize:     IS_MOBILE ? 24 : 13,
+    cursor:       'pointer',
+    outline:      'none',
   },
   claimBtn: {
-    background: '#1a4a2a',
-    color: '#2ecc71',
-    border: '1px solid #2ecc71',
+    background:   '#1a4a2a',
+    color:        '#2ecc71',
+    border:       '1px solid #2ecc71',
     borderRadius: 6,
-    padding: '5px 10px',
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
+    padding:      IS_MOBILE ? '10px 20px' : '5px 10px',
+    fontSize:     IS_MOBILE ? 24 : 12,
+    fontWeight:   600,
+    cursor:       'pointer',
   },
   occupiedBadge: {
-    background: '#1a3a5a',
-    color: '#5aabff',
+    background:   '#1a3a5a',
+    color:        '#5aabff',
     borderRadius: 6,
-    padding: '4px 10px',
-    fontSize: 12,
-    fontWeight: 600,
+    padding:      IS_MOBILE ? '8px 18px' : '4px 10px',
+    fontSize:     IS_MOBILE ? 22 : 12,
+    fontWeight:   600,
   },
   youBadge: {
-    background: '#3a1a1a',
-    color: '#e74c3c',
+    background:   '#3a1a1a',
+    color:        '#e74c3c',
     borderRadius: 6,
-    padding: '4px 10px',
-    fontSize: 12,
-    fontWeight: 600,
+    padding:      IS_MOBILE ? '8px 18px' : '4px 10px',
+    fontSize:     IS_MOBILE ? 22 : 12,
+    fontWeight:   600,
   },
   settingRow: {
-    display: 'flex',
-    alignItems: 'center',
+    display:        'flex',
+    alignItems:     'center',
     justifyContent: 'space-between',
-    padding: '8px 0',
-    borderBottom: '1px solid #1a1a3e',
-    fontSize: 13,
+    padding:        IS_MOBILE ? '12px 0' : '8px 0',
+    borderBottom:   '1px solid #1a1a3e',
+    fontSize:       IS_MOBILE ? 24 : 13,
   },
   settingLabel: { color: '#aaa' },
   toggle: {
-    width: 40,
-    height: 22,
-    borderRadius: 11,
-    cursor: 'pointer',
-    border: 'none',
-    transition: 'background 0.2s',
+    width:        IS_MOBILE ? 64 : 40,
+    height:       IS_MOBILE ? 36 : 22,
+    borderRadius: IS_MOBILE ? 18 : 11,
+    cursor:       'pointer',
+    border:       'none',
+    transition:   'background 0.2s',
+    flexShrink:   0,
   },
   btn: {
-    width: '100%',
-    padding: '13px 16px',
+    width:        '100%',
+    padding:      IS_MOBILE ? '18px 20px' : '13px 16px',
     borderRadius: 8,
-    border: 'none',
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
+    border:       'none',
+    fontSize:     IS_MOBILE ? 30 : 15,
+    fontWeight:   600,
+    cursor:       'pointer',
     marginBottom: 10,
   },
   btnPrimary:   { background: '#c0392b', color: '#fff' },
   btnSecondary: { background: '#0f3460', color: '#fff' },
   btnDisabled:  { background: '#2a2a4e', color: '#555', cursor: 'not-allowed' },
   copyRow: {
-    display: 'flex',
-    gap: 8,
+    display:    'flex',
+    gap:        8,
     alignItems: 'center',
   },
   codeDisplay: {
-    flex: 1,
-    background: '#0d1b2a',
-    border: '1px solid #2a2a4e',
-    borderRadius: 8,
-    padding: '10px 14px',
-    fontSize: 20,
-    fontWeight: 700,
+    flex:          1,
+    background:    '#0d1b2a',
+    border:        '1px solid #2a2a4e',
+    borderRadius:  8,
+    padding:       IS_MOBILE ? '14px 20px' : '10px 14px',
+    fontSize:      IS_MOBILE ? 36 : 20,
+    fontWeight:    700,
     letterSpacing: '0.2em',
-    color: '#f5f2e8',
-    textAlign: 'center',
+    color:         '#f5f2e8',
+    textAlign:     'center',
   },
   copyBtn: {
-    background: '#0f3460',
-    color: '#fff',
-    border: 'none',
+    background:   '#0f3460',
+    color:        '#fff',
+    border:       'none',
     borderRadius: 8,
-    padding: '10px 16px',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
+    padding:      IS_MOBILE ? '14px 22px' : '10px 16px',
+    fontSize:     IS_MOBILE ? 24 : 13,
+    fontWeight:   600,
+    cursor:       'pointer',
   },
 }
 
 const DEFAULT_SETTINGS = {
-  minFaan:       3,
-  scoringTable:  'half',
-  limitValue:    64,
-  claimTimeout:  24,
-  autoDiscard:   true,
-  rounds:        1,
+  minFaan:        3,
+  scoringTable:   'half',
+  limitValue:     64,
+  claimTimeout:   24,
+  autoDiscard:    true,
+  rounds:         1,
   allow13orphans: true,
   allowHeavenly:  true,
+}
+
+// Gradient fade at the bottom of the scroll container — disappears when user reaches the end
+function ScrollFade({ scrollRef }) {
+  const [atBottom, setAtBottom] = useState(false)
+
+  useEffect(() => {
+    const el = scrollRef?.current
+    if (!el) return
+    function check() {
+      setAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - 12)
+    }
+    el.addEventListener('scroll', check, { passive: true })
+    check()
+    return () => el.removeEventListener('scroll', check)
+  }, [scrollRef])
+
+  if (atBottom) return null
+  return (
+    <div style={{
+      position:       'fixed',
+      bottom:         0,
+      left:           0,
+      right:          0,
+      height:         IS_MOBILE ? 72 : 52,
+      background:     'linear-gradient(to bottom, transparent, rgba(26,26,46,0.97))',
+      pointerEvents:  'none',
+      zIndex:         20,
+      display:        'flex',
+      justifyContent: 'center',
+      alignItems:     'flex-end',
+      paddingBottom:  IS_MOBILE ? 14 : 10,
+    }}>
+      <span style={{ color: '#888', fontSize: IS_MOBILE ? 26 : 18 }}>▼</span>
+    </div>
+  )
 }
 
 export default function RoomPage({
@@ -201,6 +254,7 @@ export default function RoomPage({
 }) {
   const [settings, setSettings] = useState(initialSettings || DEFAULT_SETTINGS)
   const [copied, setCopied]     = useState(false)
+  const scrollRef               = useRef(null)
 
   function updateSetting(key, value) {
     const next = { ...settings, [key]: value }
@@ -218,7 +272,9 @@ export default function RoomPage({
   const canStart   = isHost && humanCount >= 1
 
   return (
-    <div style={S.page}>
+    <div ref={scrollRef} style={S.page}>
+      <ScrollFade scrollRef={scrollRef} />
+
       <div style={S.header}>
         <button style={S.backBtn} onClick={onBack}>←</button>
         <span style={S.headerTitle}>{t(lang, 'seats')}</span>
@@ -242,8 +298,8 @@ export default function RoomPage({
         <div style={S.card}>
           <div style={S.cardTitle}>{t(lang, 'seats')}</div>
           {WINDS.map((wind, i) => {
-            const seat = seats[wind]
-            const isMe = seat?.uid === myUid
+            const seat    = seats[wind]
+            const isMe    = seat?.uid === myUid
             const isEmpty = !seat || seat.type === 'ai'
 
             return (
@@ -352,10 +408,18 @@ export default function RoomPage({
             {t(lang, 'startGame')}
           </button>
         ) : (
-          <div style={{ textAlign: 'center', color: '#555', fontSize: 14, padding: 12 }}>
+          <div style={{
+            textAlign: 'center',
+            color:     '#555',
+            fontSize:  IS_MOBILE ? 26 : 14,
+            padding:   12,
+          }}>
             {t(lang, 'waitingForPlayers')}
           </div>
         )}
+
+        {/* Bottom padding so content clears the scroll-fade gradient */}
+        <div style={{ height: IS_MOBILE ? 80 : 60 }} />
 
       </div>
     </div>
