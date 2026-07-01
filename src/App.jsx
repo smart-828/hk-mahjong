@@ -127,6 +127,12 @@ export default function App() {
     await setInvitedPlayers(currentRoom.id, uids, names)
   }
 
+  function handleSaveRoom() {
+    setCurrentRoom(null)
+    setPage('lobby')
+    setEditingSettings(false)
+  }
+
   async function handleAutoStart() {
     if (!currentRoom?.id || currentRoom.status !== 'waiting') return
     try {
@@ -298,6 +304,7 @@ export default function App() {
         onSetScheduledTime={handleSetScheduledTime}
         onSetInvitedPlayers={handleSetInvitedPlayers}
         onLoadUsers={getAllUsers}
+        onSave={handleSaveRoom}
       />
     )
   }

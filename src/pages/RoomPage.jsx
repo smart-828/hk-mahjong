@@ -204,6 +204,17 @@ const DEFAULT_SETTINGS = {
   allowHeavenly:  true,
 }
 
+// Parse a Date into the three parts used by the date picker
+function parseSchedParts(dt) {
+  if (!dt) return { dateStr: '', hour: 20, minute: 0 }
+  const local = toDatetimeLocal(dt)
+  return {
+    dateStr: local.slice(0, 10),
+    hour:    parseInt(local.slice(11, 13), 10),
+    minute:  parseInt(local.slice(14, 16), 10),
+  }
+}
+
 // Modal for selecting players to invite
 function InviteModal({ currentUid, lang, selected, onToggle, allUsers, loading, onClose, onConfirm }) {
   const eligible = allUsers.filter(u => u.uid !== currentUid)
@@ -330,21 +341,44 @@ export default function RoomPage({
   onSetScheduledTime,   // (date | null) => void
   onSetInvitedPlayers,  // (uids, names) => void
   onLoadUsers,          // () => Promise<user[]>
+  onSave,               // save & return to lobby
 }) {
   const [settings, setSettings] = useState(initialSettings || DEFAULT_SETTINGS)
   const [copied, setCopied]     = useState(false)
   const scrollRef               = useRef(null)
 
-  // Schedule state
-  const [schedStr, setSchedStr]       = useState(scheduledTime ? toDatetimeLocal(scheduledTime) : '')
-  const minStr                        = toDatetimeLocal(new Date())
-  const schedDate                     = schedStr ? new Date(schedStr) : null
-  const { uk, hk }                    = formatBothTimezones(schedDate)
+  // Schedule state — three separate parts for the custom picker
+  const _initP = parseSchedParts(scheduledTime)
+  const [schedDateStr, setSchedDateStr] = useState(_initP.dateStr)
+  const [schedHour, setSchedHour]       = useState(_initP.hour)
+  const [schedMinute, setSchedMinute]   = useState(_initP.minute)
 
-  // Sync schedStr if scheduledTime prop changes (e.g. Firestore round-trip)
+  const todayStr  = toDatetimeLocal(new Date()).slice(0, 10)
+  const schedDate = schedDateStr
+    ? new Date(`${schedDateStr}T${String(schedHour).padStart(2,'0')}:${String(schedMinute).padStart(2,'0')}:00`)
+    : null
+  const { uk, hk } = formatBothTimezones(schedDate)
+
+  // Sync picker when the Firestore prop changes (another client / round-trip)
   useEffect(() => {
-    setSchedStr(scheduledTime ? toDatetimeLocal(scheduledTime) : '')
+    const p = parseSchedParts(scheduledTime)
+    setSchedDateStr(p.dateStr)
+    setSchedHour(p.hour)
+    setSchedMinute(p.minute)
   }, [scheduledTime])
+
+  // Save to Firestore immediately whenever any picker part changes
+  function commitSched(dateStr, hour, minute) {
+    if (dateStr) {
+      const d = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00`)
+      onSetScheduledTime?.(d)
+    } else {
+      onSetScheduledTime?.(null)
+    }
+  }
+  function handleDateChange(val) { setSchedDateStr(val); commitSched(val, schedHour, schedMinute) }
+  function handleHourChange(h)   { setSchedHour(h);      commitSched(schedDateStr, h, schedMinute) }
+  function handleMinChange(m)    { setSchedMinute(m);    commitSched(schedDateStr, schedHour, m) }
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -508,28 +542,61 @@ export default function RoomPage({
           </div>
         )}
 
-        {/* Scheduled time (host only) */}
+        {/* Scheduled time picker (host only) */}
         {isHost && (
           <div style={S.card}>
             <div style={S.cardTitle}>{t(lang, 'scheduledTime')}</div>
-            <input
-              type="datetime-local"
-              value={schedStr}
-              min={minStr}
-              onChange={e => setSchedStr(e.target.value)}
-              onBlur={e => onSetScheduledTime?.(e.target.value ? new Date(e.target.value) : null)}
-              style={{ ...S.select, width: '100%', padding: IS_MOBILE ? '12px 14px' : '8px 10px', boxSizing: 'border-box' }}
-            />
+
+            {/* Date + hour + minute row */}
+            <div style={{ display: 'flex', gap: IS_MOBILE ? 10 : 8, alignItems: 'center' }}>
+              <input
+                type="date"
+                value={schedDateStr}
+                min={todayStr}
+                onChange={e => handleDateChange(e.target.value)}
+                style={{
+                  ...S.select,
+                  flex:        1,
+                  padding:     IS_MOBILE ? '10px 12px' : '7px 10px',
+                  fontSize:    IS_MOBILE ? 22 : 13,
+                  colorScheme: 'dark',
+                }}
+              />
+              <select
+                value={schedHour}
+                disabled={!schedDateStr}
+                onChange={e => handleHourChange(+e.target.value)}
+                style={{ ...S.select, width: IS_MOBILE ? 82 : 64, padding: IS_MOBILE ? '10px 8px' : '7px 6px', fontSize: IS_MOBILE ? 22 : 13 }}
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                ))}
+              </select>
+              <span style={{ color: '#888', fontSize: IS_MOBILE ? 26 : 16, fontWeight: 700 }}>:</span>
+              <select
+                value={schedMinute}
+                disabled={!schedDateStr}
+                onChange={e => handleMinChange(+e.target.value)}
+                style={{ ...S.select, width: IS_MOBILE ? 76 : 60, padding: IS_MOBILE ? '10px 8px' : '7px 6px', fontSize: IS_MOBILE ? 22 : 13 }}
+              >
+                {[0, 15, 30, 45].map(m => (
+                  <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dual-timezone display */}
             {schedDate && (
-              <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#aaa', marginTop: 10, lineHeight: 1.9 }}>
+              <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#aaa', marginTop: IS_MOBILE ? 12 : 9, lineHeight: 1.9 }}>
                 <div>🇬🇧 {uk}</div>
                 <div>🇭🇰 {hk}</div>
               </div>
             )}
+
             {schedDate && (
               <button
-                style={{ marginTop: 8, background: 'transparent', border: '1px solid #c0392b44', color: '#c0392b', borderRadius: 5, padding: IS_MOBILE ? '7px 14px' : '4px 10px', fontSize: IS_MOBILE ? 18 : 11, cursor: 'pointer' }}
-                onClick={() => { setSchedStr(''); onSetScheduledTime?.(null) }}
+                style={{ marginTop: IS_MOBILE ? 10 : 8, background: 'transparent', border: '1px solid #c0392b44', color: '#c0392b', borderRadius: 5, padding: IS_MOBILE ? '7px 14px' : '4px 10px', fontSize: IS_MOBILE ? 18 : 11, cursor: 'pointer' }}
+                onClick={() => { setSchedDateStr(''); commitSched('', schedHour, schedMinute) }}
               >
                 {t(lang, 'clearSchedule')}
               </button>
@@ -581,12 +648,28 @@ export default function RoomPage({
           </div>
         )}
 
+        {/* Save and exit (host only) */}
+        {isHost && (
+          <button
+            style={{
+              ...S.btn,
+              background: '#1a3a2a',
+              color:      '#2ecc71',
+              border:     '2px solid #2ecc71',
+              fontSize:   IS_MOBILE ? 28 : 15,
+            }}
+            onClick={onSave}
+          >
+            💾 {lang === 'zh' ? '儲存 / Save' : '儲存 / Save'}
+          </button>
+        )}
+
         {/* Danger actions */}
         {isHost ? (
           <button
             style={{
               ...S.btn,
-              marginTop:  IS_MOBILE ? 10 : 6,
+              marginTop:  0,
               background: 'transparent',
               color:      '#e74c3c',
               border:     `2px solid #e74c3c`,
