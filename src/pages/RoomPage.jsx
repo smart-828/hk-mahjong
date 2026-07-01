@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { t } from '../i18n/translations'
+import { formatBothTimezones, toDatetimeLocal } from '../utils/time'
 
 const WINDS      = ['east', 'south', 'west', 'north']
 const WIND_CHARS = { east: '東', south: '南', west: '西', north: '北' }
@@ -203,6 +204,75 @@ const DEFAULT_SETTINGS = {
   allowHeavenly:  true,
 }
 
+// Modal for selecting players to invite
+function InviteModal({ currentUid, lang, selected, onToggle, allUsers, loading, onClose, onConfirm }) {
+  const eligible = allUsers.filter(u => u.uid !== currentUid)
+
+  function handleConfirm() {
+    const uids  = [...selected]
+    const names = Object.fromEntries(
+      uids.map(uid => [uid, allUsers.find(u => u.uid === uid)?.displayName || uid])
+    )
+    onConfirm(uids, names)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{
+        background:     '#16213e',
+        border:         '1px solid #2a2a4e',
+        borderRadius:   14,
+        padding:        IS_MOBILE ? 24 : 20,
+        width:          '90%',
+        maxWidth:       420,
+        maxHeight:      '80vh',
+        display:        'flex',
+        flexDirection:  'column',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: IS_MOBILE ? 26 : 16, color: '#f5f2e8', marginBottom: IS_MOBILE ? 16 : 12 }}>
+          {t(lang, 'selectPlayers')}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', marginBottom: IS_MOBILE ? 16 : 12 }}>
+          {loading ? (
+            <div style={{ color: '#888', textAlign: 'center', padding: 24, fontSize: IS_MOBILE ? 22 : 14 }}>…</div>
+          ) : eligible.length === 0 ? (
+            <div style={{ color: '#555', textAlign: 'center', padding: 24, fontSize: IS_MOBILE ? 20 : 13 }}>
+              {lang === 'zh' ? '沒有其他玩家' : 'No other players found'}
+            </div>
+          ) : eligible.map(u => (
+            <div
+              key={u.uid}
+              onClick={() => onToggle(u.uid)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: IS_MOBILE ? '13px 4px' : '9px 4px', borderBottom: '1px solid #1a1a3e', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: IS_MOBILE ? 24 : 15, color: selected.has(u.uid) ? '#2ecc71' : '#444', minWidth: 20 }}>
+                {selected.has(u.uid) ? '✓' : '○'}
+              </span>
+              <span style={{ fontSize: IS_MOBILE ? 22 : 14, color: '#f5f2e8' }}>
+                {u.displayName}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            style={{ flex: 1, background: 'transparent', border: '1px solid #2a2a4e', color: '#888', borderRadius: 7, padding: IS_MOBILE ? '13px 16px' : '9px 14px', fontSize: IS_MOBILE ? 22 : 13, cursor: 'pointer' }}
+            onClick={onClose}
+          >
+            {lang === 'zh' ? '取消' : 'Cancel'}
+          </button>
+          <button
+            style={{ flex: 1, background: '#1a4a2a', border: '1px solid #2ecc71', color: '#2ecc71', borderRadius: 7, padding: IS_MOBILE ? '13px 16px' : '9px 14px', fontSize: IS_MOBILE ? 22 : 13, fontWeight: 600, cursor: 'pointer' }}
+            onClick={handleConfirm}
+          >
+            {t(lang, 'done')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Gradient fade at the bottom of the scroll container — disappears when user reaches the end
 function ScrollFade({ scrollRef }) {
   const [atBottom, setAtBottom] = useState(false)
@@ -253,10 +323,48 @@ export default function RoomPage({
   onBack,
   settings: initialSettings,
   onUpdateSettings,
+  // Invite / schedule
+  scheduledTime,        // Date | null
+  invitedUids,          // string[]
+  invitedNames,         // { [uid]: string }
+  onSetScheduledTime,   // (date | null) => void
+  onSetInvitedPlayers,  // (uids, names) => void
+  onLoadUsers,          // () => Promise<user[]>
 }) {
   const [settings, setSettings] = useState(initialSettings || DEFAULT_SETTINGS)
   const [copied, setCopied]     = useState(false)
   const scrollRef               = useRef(null)
+
+  // Schedule state
+  const [schedStr, setSchedStr]       = useState(scheduledTime ? toDatetimeLocal(scheduledTime) : '')
+  const minStr                        = toDatetimeLocal(new Date())
+  const schedDate                     = schedStr ? new Date(schedStr) : null
+  const { uk, hk }                    = formatBothTimezones(schedDate)
+
+  // Sync schedStr if scheduledTime prop changes (e.g. Firestore round-trip)
+  useEffect(() => {
+    setSchedStr(scheduledTime ? toDatetimeLocal(scheduledTime) : '')
+  }, [scheduledTime])
+
+  // Invite modal state
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [allUsers, setAllUsers]               = useState([])
+  const [loadingUsers, setLoadingUsers]       = useState(false)
+  const [pendingInvites, setPendingInvites]   = useState(new Set())
+
+  async function handleOpenInvite() {
+    setPendingInvites(new Set(invitedUids ?? []))
+    setShowInviteModal(true)
+    setLoadingUsers(true)
+    try {
+      const users = await onLoadUsers?.() ?? []
+      setAllUsers(users)
+    } catch (err) {
+      console.error('Load users:', err)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   function updateSetting(key, value) {
     const next = { ...settings, [key]: value }
@@ -400,6 +508,59 @@ export default function RoomPage({
           </div>
         )}
 
+        {/* Scheduled time (host only) */}
+        {isHost && (
+          <div style={S.card}>
+            <div style={S.cardTitle}>{t(lang, 'scheduledTime')}</div>
+            <input
+              type="datetime-local"
+              value={schedStr}
+              min={minStr}
+              onChange={e => setSchedStr(e.target.value)}
+              onBlur={e => onSetScheduledTime?.(e.target.value ? new Date(e.target.value) : null)}
+              style={{ ...S.select, width: '100%', padding: IS_MOBILE ? '12px 14px' : '8px 10px', boxSizing: 'border-box' }}
+            />
+            {schedDate && (
+              <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#aaa', marginTop: 10, lineHeight: 1.9 }}>
+                <div>🇬🇧 {uk}</div>
+                <div>🇭🇰 {hk}</div>
+              </div>
+            )}
+            {schedDate && (
+              <button
+                style={{ marginTop: 8, background: 'transparent', border: '1px solid #c0392b44', color: '#c0392b', borderRadius: 5, padding: IS_MOBILE ? '7px 14px' : '4px 10px', fontSize: IS_MOBILE ? 18 : 11, cursor: 'pointer' }}
+                onClick={() => { setSchedStr(''); onSetScheduledTime?.(null) }}
+              >
+                {t(lang, 'clearSchedule')}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Invite players (host only) */}
+        {isHost && (
+          <div style={S.card}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: IS_MOBILE ? 14 : 10 }}>
+              <div style={{ ...S.cardTitle, marginBottom: 0, flex: 1 }}>{t(lang, 'invitePlayers')}</div>
+              <button
+                style={{ background: '#1a3a2a', border: '1px solid #2ecc71', color: '#2ecc71', borderRadius: 6, padding: IS_MOBILE ? '8px 14px' : '4px 10px', fontSize: IS_MOBILE ? 20 : 11, cursor: 'pointer', fontWeight: 600 }}
+                onClick={handleOpenInvite}
+              >
+                + {t(lang, 'selectPlayers')}
+              </button>
+            </div>
+            {(invitedUids ?? []).length === 0 ? (
+              <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#555' }}>
+                {t(lang, 'noPlayersInvited')}
+              </div>
+            ) : (invitedUids ?? []).map(uid => (
+              <div key={uid} style={{ fontSize: IS_MOBILE ? 20 : 12, color: '#2ecc71', padding: IS_MOBILE ? '5px 0' : '3px 0' }}>
+                ✓ {(invitedNames ?? {})[uid] || uid}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Start / waiting */}
         {isHost ? (
           <button
@@ -461,6 +622,26 @@ export default function RoomPage({
         <div style={{ height: IS_MOBILE ? 80 : 60 }} />
 
       </div>
+
+      {showInviteModal && (
+        <InviteModal
+          currentUid={myUid}
+          lang={lang}
+          selected={pendingInvites}
+          onToggle={uid => setPendingInvites(s => {
+            const n = new Set(s)
+            if (n.has(uid)) n.delete(uid); else n.add(uid)
+            return n
+          })}
+          allUsers={allUsers}
+          loading={loadingUsers}
+          onClose={() => setShowInviteModal(false)}
+          onConfirm={(uids, names) => {
+            onSetInvitedPlayers?.(uids, names)
+            setShowInviteModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }

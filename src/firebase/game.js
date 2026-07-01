@@ -866,3 +866,21 @@ export async function recordWinScores(roomId) {
     }
   })
 }
+
+// ── Auto-start when all invited players are seated ────────────
+// Returns true if the game was started, false otherwise.
+export async function startGameWhenReady(roomId) {
+  const snap = await getDocFromServer(doc(db, 'rooms', roomId))
+  if (!snap.exists()) return false
+  const room = snap.data()
+  if (room.status !== 'waiting') return false
+  const invitedUids = room.invitedUids ?? []
+  if (invitedUids.length === 0) return false
+  const seatedUids = Object.values(room.seats ?? {})
+    .filter(s => s.type === 'human')
+    .map(s => s.uid)
+  const allSeated = invitedUids.every(uid => seatedUids.includes(uid))
+  if (!allSeated) return false
+  await startGame(roomId)
+  return true
+}

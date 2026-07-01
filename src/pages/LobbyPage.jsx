@@ -96,6 +96,7 @@ const S = {
   },
   badgeYourTurn: { background: '#c0392b22', color: '#e74c3c' },
   badgeWaiting:  { background: '#1a4a2a22', color: '#2ecc71' },
+  badgeInvited:  { background: '#3a2a0022', color: '#ffd700', border: '1px solid #ffd70044' },
   profileRow: {
     display: 'flex',
     alignItems: 'center',
@@ -258,13 +259,23 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
                   <div style={S.gameCardMeta}>
                     {game.players} players · {game.tilesLeft} tiles left
                   </div>
+                  {game.scheduledTime && (
+                    <div style={{ ...S.gameCardMeta, marginTop: 2, color: '#ffd700' }}>
+                      {game.scheduledTime.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
                 </div>
                 <span style={{
                   ...S.badge,
-                  ...(game.yourTurn ? S.badgeYourTurn : S.badgeWaiting),
+                  ...(game.isInvited ? S.badgeInvited : game.yourTurn ? S.badgeYourTurn : S.badgeWaiting),
                   marginRight: 6,
                 }}>
-                  {game.yourTurn ? t(lang, 'yourTurn') : t(lang, 'waitingFor') + '…'}
+                  {game.isInvited
+                    ? t(lang, 'invited')
+                    : game.yourTurn
+                      ? t(lang, 'yourTurn')
+                      : t(lang, 'waitingFor') + '…'
+                  }
                 </span>
                 {game.onDelete && (
                   <button

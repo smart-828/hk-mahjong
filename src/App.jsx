@@ -8,13 +8,15 @@ import { LoginPage, ProfileSetupPage } from './pages/AuthPages'
 import LobbyPage from './pages/LobbyPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import RoomPage from './pages/RoomPage'
+import WaitingScreen from './pages/WaitingScreen'
 import GamePage from './pages/GamePage'
 import {
   createRoom, joinRoom, claimSeat,
   setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom, deleteUserStaleRooms,
   subscribeToRoom, subscribeToUserRooms,
+  setScheduledTime, setInvitedPlayers, fillEmptySeatsWithAI, getAllUsers,
 } from './firebase/rooms'
-import { startGame } from './firebase/game'
+import { startGame, startGameWhenReady } from './firebase/game'
 
 export default function App() {
   const {
@@ -24,10 +26,11 @@ export default function App() {
     lang,
   } = useAuth()
 
-  const [page, setPage]               = useState('lobby')   // 'lobby' | 'room'
-  const [currentRoom, setCurrentRoom] = useState(null)
-  const [activeGames, setActiveGames] = useState([])
-  const [roomVisKey, setRoomVisKey]   = useState(0)  // increments on page-visible to force room re-subscribe
+  const [page, setPage]                   = useState('lobby')   // 'lobby' | 'room'
+  const [currentRoom, setCurrentRoom]     = useState(null)
+  const [activeGames, setActiveGames]     = useState([])
+  const [roomVisKey, setRoomVisKey]       = useState(0)  // increments on page-visible to force room re-subscribe
+  const [editingSettings, setEditingSettings] = useState(false)  // host viewing RoomPage from WaitingScreen
 
   // Derive which wind seat the current user occupies in the current room
   const myWind = currentRoom
@@ -45,20 +48,23 @@ export default function App() {
     if (!user) return
     const unsub = subscribeToUserRooms(user.uid, rooms => {
       setActiveGames(rooms.map(r => {
-        const myW      = Object.entries(r.seats ?? {}).find(([, s]) => s.uid === user.uid)?.[0]
-        const yourTurn = r.status === 'playing' && r.hand?.currentTurn === myW
-        const isHost   = r.hostUid === user.uid
+        const myW       = Object.entries(r.seats ?? {}).find(([, s]) => s.uid === user.uid)?.[0]
+        const yourTurn  = r.status === 'playing' && r.hand?.currentTurn === myW
+        const isHost    = r.hostUid === user.uid
+        const isInvited = !myW && (r.invitedUids ?? []).includes(user.uid)
         return {
-          id:       r.id,
-          roomCode: r.roomCode,
-          players:  Object.values(r.seats).filter(s => s.type === 'human').length,
-          tilesLeft: r.hand?.tilesLeft ?? '—',
-          status:   r.status,
+          id:            r.id,
+          roomCode:      r.roomCode,
+          players:       Object.values(r.seats ?? {}).filter(s => s.type === 'human').length,
+          tilesLeft:     r.hand?.tilesLeft ?? '—',
+          status:        r.status,
           yourTurn,
           isHost,
-          onOpen:   () => openRoom(r),
-          onDelete: isHost   ? () => deleteRoom(r.id).catch(console.error) : null,
-          onLeave:  !isHost && myW ? () => leaveRoom(r.id, myW).catch(console.error) : null,
+          isInvited,
+          scheduledTime: r.scheduledTime?.toDate?.() ?? null,
+          onOpen:        () => openRoom(r),
+          onDelete:      isHost   ? () => deleteRoom(r.id).catch(console.error) : null,
+          onLeave:       !isHost && myW ? () => leaveRoom(r.id, myW).catch(console.error) : null,
         }
       }))
     })
@@ -86,6 +92,7 @@ export default function App() {
   function openRoom(room) {
     setCurrentRoom(room)
     setPage('room')
+    setEditingSettings(false)
   }
 
   async function handleCreateRoom() {
@@ -106,6 +113,28 @@ export default function App() {
 
   async function handleClaimSeat(wind) {
     await claimSeat(currentRoom.id, wind, user, profile)
+    // Auto-start if all invited players are now seated
+    startGameWhenReady(currentRoom.id).catch(console.error)
+  }
+
+  async function handleSetScheduledTime(date) {
+    if (!currentRoom?.id) return
+    await setScheduledTime(currentRoom.id, date)
+  }
+
+  async function handleSetInvitedPlayers(uids, names) {
+    if (!currentRoom?.id) return
+    await setInvitedPlayers(currentRoom.id, uids, names)
+  }
+
+  async function handleAutoStart() {
+    if (!currentRoom?.id || currentRoom.status !== 'waiting') return
+    try {
+      await fillEmptySeatsWithAI(currentRoom.id)
+      await startGame(currentRoom.id)
+    } catch (err) {
+      console.error('Auto-start error:', err)
+    }
   }
 
   async function handleSetSeatType(wind, type, aiLevel) {
@@ -131,6 +160,7 @@ export default function App() {
       await deleteRoom(currentRoom.id)
       setCurrentRoom(null)
       setPage('lobby')
+      setEditingSettings(false)
     } catch (err) {
       console.error('Delete room error:', err)
     }
@@ -142,6 +172,7 @@ export default function App() {
       await leaveRoom(currentRoom.id, myWind)
       setCurrentRoom(null)
       setPage('lobby')
+      setEditingSettings(false)
     } catch (err) {
       console.error('Leave room error:', err)
     }
@@ -218,9 +249,28 @@ export default function App() {
       )
     }
 
+    const isHost        = currentRoom.hostUid === user.uid
+    const hasSchedule   = !!currentRoom.scheduledTime
+    const scheduledDate = currentRoom.scheduledTime?.toDate?.() ?? null
+
+    // WaitingScreen: shown when a scheduled time is set and host isn't editing settings
+    if (hasSchedule && !editingSettings) {
+      return (
+        <WaitingScreen
+          room={currentRoom}
+          myUid={user.uid}
+          myWind={myWind}
+          isHost={isHost}
+          lang={lang}
+          onBack={() => { setCurrentRoom(null); setPage('lobby'); setEditingSettings(false) }}
+          onEditSettings={() => setEditingSettings(true)}
+          onClaimSeat={handleClaimSeat}
+          onStartNow={handleAutoStart}
+        />
+      )
+    }
+
     // Pre-game lobby → RoomPage
-    const isHost = currentRoom.hostUid === user.uid
-    console.log('[App] isHost check — user.uid:', user?.uid, 'currentRoom.hostUid:', currentRoom?.hostUid, 'isHost:', isHost)
     return (
       <RoomPage
         lang={lang}
@@ -235,7 +285,19 @@ export default function App() {
         onUpdateSettings={handleUpdateSettings}
         onDeleteRoom={handleDeleteRoom}
         onLeaveRoom={handleLeaveRoom}
-        onBack={() => setPage('lobby')}
+        onBack={() => {
+          if (hasSchedule && editingSettings) {
+            setEditingSettings(false)  // return to WaitingScreen
+          } else {
+            setCurrentRoom(null); setPage('lobby')
+          }
+        }}
+        scheduledTime={scheduledDate}
+        invitedUids={currentRoom.invitedUids ?? []}
+        invitedNames={currentRoom.invitedNames ?? {}}
+        onSetScheduledTime={handleSetScheduledTime}
+        onSetInvitedPlayers={handleSetInvitedPlayers}
+        onLoadUsers={getAllUsers}
       />
     )
   }

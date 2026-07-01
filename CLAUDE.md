@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow rule
+
+After completing every task, always run:
+
+```bash
+git add -A && git commit -m '[description of what was built]' && git push origin main
+```
+
+Never leave work uncommitted.
+
 ## Commands
 
 ```bash

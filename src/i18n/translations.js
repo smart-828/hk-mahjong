@@ -120,6 +120,20 @@ const translations = {
     allPassed:      'All passed',
     discarded:      'Discarded',
 
+    // Scheduled game / invite
+    scheduledTime:    'Scheduled time',
+    invitePlayers:    'Invite players',
+    invited:          'Invited',
+    allPlayersPresent:'All players seated — ready to start!',
+    gameStartingIn:   'Game starting in',
+    selectPlayers:    'Select players',
+    done:             'Done',
+    editSettings:     'Edit settings',
+    startingNow:      'Starting in',
+    pendingInvites:   'Waiting for',
+    clearSchedule:    'Clear schedule',
+    noPlayersInvited: 'No players invited',
+
     // Errors
     invalidHand:    'Invalid hand — not enough faan',
     falseMahjong:   'False mahjong — penalty applied',
@@ -244,6 +258,20 @@ const translations = {
     claimResult:    '認牌結果',
     allPassed:      '全部過',
     discarded:      '出牌',
+
+    // Scheduled game / invite
+    scheduledTime:    '遊戲時間',
+    invitePlayers:    '邀請玩家',
+    invited:          '已邀請',
+    allPlayersPresent:'所有玩家已就緒，可以開始！',
+    gameStartingIn:   '遊戲將於',
+    selectPlayers:    '選擇玩家',
+    done:             '完成',
+    editSettings:     '編輯設定',
+    startingNow:      '即將開始，剩餘',
+    pendingInvites:   '等待',
+    clearSchedule:    '取消排程',
+    noPlayersInvited: '未邀請任何玩家',
 
     // Errors
     invalidHand:    '無效手牌 — 番數不足',

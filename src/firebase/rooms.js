@@ -5,6 +5,7 @@ import {
   collection, doc, getDoc, getDocs,
   setDoc, updateDoc, deleteDoc, query, where,
   serverTimestamp, onSnapshot,
+  Timestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from './config'
 
@@ -176,15 +177,80 @@ export function subscribeToRoom(roomId, callback) {
   })
 }
 
-// Subscribe to user's active rooms
+// Subscribe to user's active rooms (seated or invited)
 export function subscribeToUserRooms(uid, callback) {
-  return onSnapshot(
+  let seatedRooms  = []
+  let invitedRooms = []
+
+  function merge() {
+    const all = new Map()
+    for (const r of seatedRooms)  all.set(r.id, r)
+    for (const r of invitedRooms) if (!all.has(r.id)) all.set(r.id, r)
+    callback(
+      Array.from(all.values())
+        .filter(r => ['waiting', 'playing'].includes(r.status))
+    )
+  }
+
+  const unsub1 = onSnapshot(
     query(collection(db, 'rooms'), where('status', 'in', ['waiting', 'playing'])),
     snap => {
-      const rooms = snap.docs
+      seatedRooms = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(r => Object.values(r.seats).some(s => s.uid === uid))
-      callback(rooms)
+        .filter(r => Object.values(r.seats ?? {}).some(s => s.uid === uid))
+      merge()
     }
   )
+
+  const unsub2 = onSnapshot(
+    query(collection(db, 'rooms'), where('invitedUids', 'array-contains', uid)),
+    snap => {
+      invitedRooms = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => ['waiting', 'playing'].includes(r.status))
+      merge()
+    }
+  )
+
+  return () => { unsub1(); unsub2() }
+}
+
+// Fetch all registered users (for invite modal)
+export async function getAllUsers() {
+  const snap = await getDocs(collection(db, 'users'))
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+}
+
+// Set or clear the scheduled game start time
+export async function setScheduledTime(roomId, date) {
+  await updateDoc(doc(db, 'rooms', roomId), {
+    scheduledTime: date ? Timestamp.fromDate(date) : deleteField(),
+    updatedAt:     serverTimestamp(),
+  })
+}
+
+// Save the invite list (uids + display names)
+export async function setInvitedPlayers(roomId, uids, names) {
+  await updateDoc(doc(db, 'rooms', roomId), {
+    invitedUids:  uids,
+    invitedNames: names,
+    updatedAt:    serverTimestamp(),
+  })
+}
+
+// Fill every non-human seat with an AI player before auto-start
+export async function fillEmptySeatsWithAI(roomId) {
+  const snap = await getDoc(doc(db, 'rooms', roomId))
+  if (!snap.exists()) return
+  const room = snap.data()
+  if (room.status !== 'waiting') return
+  const updates = {}
+  for (const [wind, seat] of Object.entries(room.seats ?? {})) {
+    if (!seat || seat.type !== 'human') {
+      updates[`seats.${wind}`] = { uid: 'AI', name: 'AI', lang: 'en', type: 'ai', aiLevel: 'aiMedium' }
+    }
+  }
+  if (Object.keys(updates).length) {
+    await updateDoc(doc(db, 'rooms', roomId), { ...updates, updatedAt: serverTimestamp() })
+  }
 }
