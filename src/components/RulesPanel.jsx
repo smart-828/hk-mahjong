@@ -341,8 +341,10 @@ export default function RulesPanel({ lang, onClose }) {
       <div style={{
         position:      'fixed',
         bottom:        0,
-        left:          0,
-        right:         0,
+        left:          '50%',
+        transform:     'translateX(-50%)',
+        width:         '100%',
+        maxWidth:      600,
         height:        '82vh',
         background:    C.bg,
         borderRadius:  IS_MOBILE ? '18px 18px 0 0' : '14px 14px 0 0',
