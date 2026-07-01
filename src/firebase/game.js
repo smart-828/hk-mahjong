@@ -542,6 +542,14 @@ export function getAvailableActions(room, myHand, myExposedMelds, myWind) {
 
   if (phase === 'claim' && lastDiscard?.discardedBy !== myWind && !claims?.[myWind]) {
     const { tileId, discardedBy } = lastDiscard
+    // ── Kong eligibility debug log ────────────────────────────
+    const _base        = tileBase(tileId)
+    const _matchCount  = (myHand ?? []).filter(t => tileBase(t) === _base).length
+    const _canKong     = _matchCount >= 3
+    console.log(
+      '[getAvailableActions] claim wind=%s discard=%s base=%s handLen=%d matches=%d canKong=%s | hand=%o',
+      myWind, tileId, _base, (myHand ?? []).length, _matchCount, _canKong, myHand,
+    )
     let canWin  = false
     let winFaan = null   // null = no structural win; number = faan count (may be below minimum)
 

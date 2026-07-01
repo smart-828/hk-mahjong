@@ -140,6 +140,32 @@ export function useGame(roomId, myWind, room) {
       .finally(() => { drawingRef.current = false })
   }, [roomId, myWind, room?.hand?.phase, room?.hand?.currentTurn, claimResult])
 
+  // Auto dead-wall draw: fires automatically after any kong (from discard claim,
+  // concealed kong, or added kong) so the player does not need to click a second button.
+  // NOT gated on claimResult — fires promptly regardless of overlay state.
+  useEffect(() => {
+    if (!room?.hand || !myWind || !roomId) return
+    const { phase, currentTurn } = room.hand
+    if (phase !== 'draw_dead' || currentTurn !== myWind) return
+    if (drawingRef.current) return
+
+    console.log('[draw_dead] auto-drawing from dead wall for', myWind)
+    drawingRef.current = true
+    // Short delay lets the UI render the exposed kong meld before the phase transitions
+    const t = setTimeout(() => {
+      drawDeadWallTile(roomId, myWind)
+        .then(() => console.log('[draw_dead] complete for', myWind))
+        .catch(err => {
+          if (!err.message?.includes('Not in draw_dead phase') &&
+              !err.message?.includes('Not your turn')) {
+            console.error('Auto dead-wall draw error:', err)
+          }
+        })
+        .finally(() => { drawingRef.current = false })
+    }, 500)
+    return () => { clearTimeout(t); drawingRef.current = false }
+  }, [roomId, myWind, room?.hand?.phase, room?.hand?.currentTurn])
+
   // Record win scores to user profiles exactly once when a hand finishes.
   // All clients race to call this; the scoresRecorded flag makes it idempotent.
   useEffect(() => {
