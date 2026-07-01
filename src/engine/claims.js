@@ -160,6 +160,7 @@ export function resolveClaims(claims, discardedBySeat) {
   })
 
   const [winningSeat, winningClaim] = sorted[0]
+  if (!(PRIORITY[winningClaim.type] > 0)) return null
   return { seat: winningSeat, claim: winningClaim }
 }
 
