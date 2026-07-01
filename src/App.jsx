@@ -11,7 +11,7 @@ import RoomPage from './pages/RoomPage'
 import GamePage from './pages/GamePage'
 import {
   createRoom, joinRoom, claimSeat,
-  setSeatToAI, updateRoomSettings,
+  setSeatToAI, updateRoomSettings, deleteRoom,
   subscribeToRoom, subscribeToUserRooms,
 } from './firebase/rooms'
 import { startGame } from './firebase/game'
@@ -120,6 +120,17 @@ export default function App() {
     }
   }
 
+  async function handleDeleteRoom() {
+    if (!currentRoom?.id) return
+    try {
+      await deleteRoom(currentRoom.id)
+      setCurrentRoom(null)
+      setPage('lobby')
+    } catch (err) {
+      console.error('Delete room error:', err)
+    }
+  }
+
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return (
@@ -186,6 +197,7 @@ export default function App() {
         onSetSeatType={handleSetSeatType}
         onStartGame={handleStartGame}
         onUpdateSettings={handleUpdateSettings}
+        onDeleteRoom={handleDeleteRoom}
         onBack={() => setPage('lobby')}
       />
     )

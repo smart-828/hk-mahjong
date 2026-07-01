@@ -248,6 +248,7 @@ export default function RoomPage({
   onClaimSeat,
   onSetSeatType,  // host only
   onStartGame,
+  onDeleteRoom,
   onBack,
   settings: initialSettings,
   onUpdateSettings,
@@ -416,6 +417,29 @@ export default function RoomPage({
           }}>
             {t(lang, 'waitingForPlayers')}
           </div>
+        )}
+
+        {/* Delete room — host only, danger action */}
+        {isHost && (
+          <button
+            style={{
+              ...S.btn,
+              marginTop:   IS_MOBILE ? 8 : 4,
+              background:  'transparent',
+              color:       '#c0392b',
+              border:      '1px solid #c0392b',
+              fontSize:    IS_MOBILE ? 24 : 13,
+              fontWeight:  600,
+              padding:     IS_MOBILE ? '14px 16px' : '10px 16px',
+            }}
+            onClick={() => {
+              if (window.confirm(lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?')) {
+                onDeleteRoom?.()
+              }
+            }}
+          >
+            {lang === 'zh' ? '刪除房間' : 'Delete room'}
+          </button>
         )}
 
         {/* Bottom padding so content clears the scroll-fade gradient */}

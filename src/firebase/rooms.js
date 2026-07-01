@@ -3,7 +3,7 @@
 
 import {
   collection, doc, getDoc, getDocs,
-  setDoc, updateDoc, query, where,
+  setDoc, updateDoc, deleteDoc, query, where,
   serverTimestamp, onSnapshot,
 } from 'firebase/firestore'
 import { db } from './config'
@@ -142,6 +142,11 @@ export async function getUserRooms(uid) {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(r => Object.values(r.seats).some(s => s.uid === uid))
+}
+
+// Delete a room (host only, waiting rooms)
+export async function deleteRoom(roomId) {
+  await deleteDoc(doc(db, 'rooms', roomId))
 }
 
 // Subscribe to a room (real-time)
