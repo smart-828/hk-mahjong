@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { t } from '../i18n/translations'
 import { formatBothTimezones, toDatetimeLocal } from '../utils/time'
+import ConfirmPopover from '../components/ConfirmPopover'
 
 const WINDS      = ['east', 'south', 'west', 'north']
 const WIND_CHARS = { east: '東', south: '南', west: '西', north: '北' }
@@ -341,6 +342,7 @@ export default function RoomPage({
 }) {
   const [settings, setSettings] = useState(initialSettings || DEFAULT_SETTINGS)
   const [copied, setCopied]     = useState(false)
+  const [confirm, setConfirm]   = useState(null)  // { x, y, msg, onOk }
   const scrollRef               = useRef(null)
 
   // ── Schedule state (local draft — not saved until Save/Start Now) ──────────
@@ -654,10 +656,7 @@ export default function RoomPage({
                 border:     '2px solid #e74c3c',
                 fontSize:   IS_MOBILE ? 26 : 14,
               }}
-              onClick={() => {
-                const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
-                if (window.confirm(msg)) onDeleteRoom?.()
-              }}
+              onClick={e => setConfirm({ x: e.clientX, y: e.clientY, msg: lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?', onOk: () => onDeleteRoom?.() })}
             >
               {lang === 'zh' ? '🗑 刪除房間' : '🗑 Delete Room'}
             </button>
@@ -676,10 +675,7 @@ export default function RoomPage({
                 border:     '2px solid #e67e22',
                 fontSize:   IS_MOBILE ? 26 : 14,
               }}
-              onClick={() => {
-                const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
-                if (window.confirm(msg)) onLeaveRoom?.()
-              }}
+              onClick={e => setConfirm({ x: e.clientX, y: e.clientY, msg: lang === 'zh' ? '確定離開此房間？' : 'Leave this room?', onOk: () => onLeaveRoom?.() })}
             >
               {lang === 'zh' ? '← 離開房間' : '← Leave Room'}
             </button>
@@ -690,6 +686,16 @@ export default function RoomPage({
         <div style={{ height: IS_MOBILE ? 80 : 60 }} />
 
       </div>
+
+      {confirm && (
+        <ConfirmPopover
+          x={confirm.x}
+          y={confirm.y}
+          msg={confirm.msg}
+          onOk={confirm.onOk}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
 
       {showInviteModal && (
         <InviteModal

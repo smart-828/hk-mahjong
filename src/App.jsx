@@ -12,7 +12,7 @@ import WaitingScreen from './pages/WaitingScreen'
 import GamePage from './pages/GamePage'
 import {
   createRoom, joinRoom, claimSeat,
-  setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom, deleteUserStaleRooms,
+  setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom,
   subscribeToRoom, subscribeToUserRooms,
   saveRoomConfig, fillEmptySeatsWithAI, getAllUsers,
 } from './firebase/rooms'
@@ -179,17 +179,6 @@ export default function App() {
     }
   }
 
-  async function handleCleanupRooms() {
-    if (!user?.uid) return
-    try {
-      const count = await deleteUserStaleRooms(user.uid)
-      return count
-    } catch (err) {
-      console.error('Cleanup rooms error:', err)
-      return 0
-    }
-  }
-
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return (
@@ -315,7 +304,6 @@ export default function App() {
       onJoinRoom={handleJoinRoom}
       onSignOut={signOut}
       activeGames={activeGames}
-      onCleanupRooms={handleCleanupRooms}
       onOpenLeaderboard={() => setPage('leaderboard')}
     />
   )

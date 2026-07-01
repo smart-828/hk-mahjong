@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { t } from '../i18n/translations'
+import ConfirmPopover from '../components/ConfirmPopover'
 
 const S = {
   page: {
@@ -125,11 +126,11 @@ const S = {
   },
 }
 
-export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onSignOut, activeGames = [], onCleanupRooms, onOpenLeaderboard }) {
-  const [joinCode, setJoinCode]       = useState('')
-  const [joining, setJoining]         = useState(false)
-  const [error, setError]             = useState(null)
-  const [cleanupMsg, setCleanupMsg]   = useState(null)
+export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onSignOut, activeGames = [], onOpenLeaderboard }) {
+  const [joinCode, setJoinCode]   = useState('')
+  const [joining, setJoining]     = useState(false)
+  const [error, setError]         = useState(null)
+  const [confirm, setConfirm]     = useState(null)  // { x, y, msg, onOk }
 
   async function handleJoin(e) {
     e.preventDefault()
@@ -208,41 +209,7 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
 
         {/* Active games */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-            <div style={{ ...S.cardTitle, marginBottom: 0, flex: 1 }}>{t(lang, 'myGames')}</div>
-            {activeGames.length > 0 && (
-              <button
-                style={{
-                  background:   'transparent',
-                  border:       '1px solid #c0392b44',
-                  color:        '#c0392b',
-                  borderRadius: 6,
-                  padding:      '3px 9px',
-                  fontSize:     11,
-                  cursor:       'pointer',
-                  fontWeight:   600,
-                }}
-                onClick={async () => {
-                  const msg = lang === 'zh'
-                    ? '確定刪除所有已完成及等待中的房間？'
-                    : 'Delete all your finished and waiting rooms?'
-                  if (!window.confirm(msg)) return
-                  const count = await onCleanupRooms?.()
-                  setCleanupMsg(
-                    lang === 'zh'
-                      ? `已刪除 ${count ?? 0} 個房間`
-                      : `Deleted ${count ?? 0} room${count === 1 ? '' : 's'}`
-                  )
-                  setTimeout(() => setCleanupMsg(null), 3000)
-                }}
-              >
-                🗑 {lang === 'zh' ? '清除舊房間' : 'Clean up'}
-              </button>
-            )}
-          </div>
-          {cleanupMsg && (
-            <div style={{ color: '#2ecc71', fontSize: 12, marginBottom: 10 }}>{cleanupMsg}</div>
-          )}
+          <div style={S.cardTitle}>{t(lang, 'myGames')}</div>
           {activeGames.length === 0 ? (
             <div style={{ color: '#555', fontSize: 14, textAlign: 'center', padding: '12px 0' }}>
               {t(lang, 'noActiveGames')}
@@ -291,8 +258,7 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
                     }}
                     onClick={e => {
                       e.stopPropagation()
-                      const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
-                      if (window.confirm(msg)) game.onDelete()
+                      setConfirm({ x: e.clientX, y: e.clientY, msg: lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?', onOk: () => game.onDelete() })
                     }}
                     title="Delete room"
                   >
@@ -314,8 +280,7 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
                     }}
                     onClick={e => {
                       e.stopPropagation()
-                      const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
-                      if (window.confirm(msg)) game.onLeave()
+                      setConfirm({ x: e.clientX, y: e.clientY, msg: lang === 'zh' ? '確定離開此房間？' : 'Leave this room?', onOk: () => game.onLeave() })
                     }}
                     title="Leave room"
                   >
@@ -328,6 +293,16 @@ export default function LobbyPage({ profile, lang, onCreateRoom, onJoinRoom, onS
         </div>
 
       </div>
+
+      {confirm && (
+        <ConfirmPopover
+          x={confirm.x}
+          y={confirm.y}
+          msg={confirm.msg}
+          onOk={confirm.onOk}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   )
 }
