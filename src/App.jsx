@@ -10,10 +10,6 @@ import LeaderboardPage from './pages/LeaderboardPage'
 import RoomPage from './pages/RoomPage'
 import WaitingScreen from './pages/WaitingScreen'
 import GamePage from './pages/GamePage'
-import RulesPanel from './components/RulesPanel'
-
-const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth <= 480
-
 import {
   createRoom, joinRoom, claimSeat,
   setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom,
@@ -35,7 +31,6 @@ export default function App() {
   const [activeGames, setActiveGames]     = useState([])
   const [roomVisKey, setRoomVisKey]       = useState(0)  // increments on page-visible to force room re-subscribe
   const [editingSettings, setEditingSettings] = useState(false)  // host viewing RoomPage from WaitingScreen
-  const [rulesOpen, setRulesOpen]         = useState(false)
 
   // Derive which wind seat the current user occupies in the current room
   const myWind = currentRoom
@@ -312,42 +307,5 @@ export default function App() {
     )
   }
 
-  return (
-    <>
-      {pageContent}
-
-      {/* ── Floating rules button ── */}
-      <button
-        onClick={() => setRulesOpen(true)}
-        style={{
-          position:       'fixed',
-          bottom:         IS_MOBILE ? 24 : 20,
-          left:           IS_MOBILE ? 16 : 14,
-          width:          IS_MOBILE ? 52 : 40,
-          height:         IS_MOBILE ? 52 : 40,
-          borderRadius:   '50%',
-          background:     '#16213e',
-          border:         '2px solid #4a4a7e',
-          color:          '#e8c870',
-          fontSize:       IS_MOBILE ? 22 : 16,
-          fontWeight:     700,
-          cursor:         'pointer',
-          zIndex:         1400,
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: 'center',
-          boxShadow:      '0 2px 14px rgba(0,0,0,0.55)',
-          fontFamily:     '-apple-system, sans-serif',
-          userSelect:     'none',
-        }}
-      >
-        ?
-      </button>
-
-      {/* ── Rules panel ── */}
-      {rulesOpen && (
-        <RulesPanel lang={lang} onClose={() => setRulesOpen(false)} />
-      )}
-    </>
-  )
+  return pageContent
 }

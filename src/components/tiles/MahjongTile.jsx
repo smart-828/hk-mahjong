@@ -223,22 +223,6 @@ function BonusContent({ base, fs1, fsX }) {
   )
 }
 
-function CountBadge({ count }) {
-  return (
-    <div style={{
-      position: 'absolute', top: -5, right: -5,
-      width: 16, height: 16, borderRadius: '50%',
-      background: '#c0392b', color: '#fff',
-      fontSize: 9, fontWeight: 700,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'none',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-    }}>
-      {count}
-    </div>
-  )
-}
-
 // ── Main component ─────────────────────────────────────────────
 export default function MahjongTile({
   tileId,
@@ -246,7 +230,6 @@ export default function MahjongTile({
   selected    = false,
   highlighted = false,
   onClick     = null,
-  count       = null,
 }) {
   const { w, h, fs1, fs2, fsX } = SIZES[size] ?? SIZES.md
   const base = tileId === 'back' ? 'back' : tileBase(tileId)
@@ -266,7 +249,6 @@ export default function MahjongTile({
             userSelect: 'none', WebkitTapHighlightColor: 'transparent',
           }}
         />
-        {count != null && count > 1 && <CountBadge count={count} />}
       </div>
     )
   }
@@ -331,8 +313,6 @@ export default function MahjongTile({
           {content}
         </div>
       </div>
-
-      {count != null && count > 1 && <CountBadge count={count} />}
     </div>
   )
 }

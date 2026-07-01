@@ -4,6 +4,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import MahjongTile from '../components/tiles/MahjongTile.jsx'
+import RulesPanel from '../components/RulesPanel.jsx'
 import { t } from '../i18n/translations.js'
 import { tileBase, SEAT_ORDER } from '../engine/tiles.js'
 import { subscribeToChat, sendMessage } from '../firebase/chat.js'
@@ -193,12 +194,21 @@ function DiscardPool({ discardPool, lastDiscard, landscape }) {
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'flex-end' }}>
           {grouped.map(({ tileId, base, count }) => (
-            <MahjongTile key={base} tileId={tileId} size="lg" count={count} />
+            <div key={base} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <MahjongTile tileId={tileId} size="lg" />
+              <div style={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {count >= 2 && (
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#e8c870', lineHeight: 1 }}>
+                    {count}
+                  </span>
+                )}
+              </div>
+            </div>
           ))}
           {lastIsInPool && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <MahjongTile tileId={lastTileId} size="xl" highlighted />
-              <span style={{ fontSize: FS.xxs, color: C.red, fontWeight: 700 }}>最新</span>
+              <div style={{ height: 20 }} />
             </div>
           )}
         </div>
@@ -1140,6 +1150,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
   const [chatOpen, setChatOpen]       = useState(false)
   const [chatMsgs, setChatMsgs]       = useState([])
   const [unread, setUnread]           = useState(0)
+  const [rulesOpen, setRulesOpen]     = useState(false)
   const [showVoteBox, setShowVoteBox]     = useState(false)
   const [voteSecsLeft, setVoteSecsLeft]   = useState(null)
   const [closeSecsLeft, setCloseSecsLeft] = useState(null)
@@ -1516,6 +1527,23 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
               {WIND_CHAR[myWind]}
             </div>
           )}
+          <button
+            onClick={() => setRulesOpen(true)}
+            style={{
+              background:   C.darker,
+              border:       `1px solid #4a4a7e`,
+              borderRadius: 4,
+              color:        '#e8c870',
+              fontSize:     FS.sm,
+              fontWeight:   700,
+              padding:      IS_MOBILE ? '3px 10px' : '2px 8px',
+              cursor:       'pointer',
+              lineHeight:   1,
+              flexShrink:   0,
+            }}
+          >
+            ?
+          </button>
         </div>
       </div>
 
@@ -1704,6 +1732,9 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
           )}
         </button>
       )}
+
+      {/* ── Rules panel ──────────────────────────────────────── */}
+      {rulesOpen && <RulesPanel lang={lang} onClose={() => setRulesOpen(false)} />}
     </div>
   )
 }
