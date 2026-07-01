@@ -196,6 +196,7 @@ export default function App() {
 
     // Pre-game lobby → RoomPage
     const isHost = currentRoom.hostUid === user.uid
+    console.log('[App] isHost check — user.uid:', user?.uid, 'currentRoom.hostUid:', currentRoom?.hostUid, 'isHost:', isHost)
     return (
       <RoomPage
         lang={lang}

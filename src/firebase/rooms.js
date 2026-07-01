@@ -33,6 +33,7 @@ async function getUniqueRoomCode() {
 
 // Create a new room
 export async function createRoom(hostUser, hostProfile) {
+  console.log('[createRoom] hostUser.uid:', hostUser?.uid, 'type:', typeof hostUser?.uid)
   const roomCode = await getUniqueRoomCode()
   const roomRef  = doc(collection(db, 'rooms'))
 
@@ -60,6 +61,7 @@ export async function createRoom(hostUser, hostProfile) {
     updatedAt: serverTimestamp(),
   }
 
+  console.log('[createRoom] writing hostUid:', roomData.hostUid)
   await setDoc(roomRef, roomData)
   return { id: roomRef.id, ...roomData }
 }
