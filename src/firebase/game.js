@@ -694,20 +694,17 @@ export async function triggerAITurn(roomId) {
   try {
     if (phase === 'draw') {
       console.log('[AI] %s drawing from wall', currentTurn)
-      await delay(1000)
       const res = await drawTile(roomId, currentTurn)
       console.log('[AI] %s draw complete — exhausted=%s', currentTurn, res?.exhausted)
       if (!res?.exhausted) await triggerAITurn(roomId)  // recurse into discard phase
 
     } else if (phase === 'draw_dead') {
       console.log('[AI] %s drawing from dead wall (post-kong)', currentTurn)
-      await delay(1000)
       const res = await drawDeadWallTile(roomId, currentTurn)
       if (!res?.exhausted) await triggerAITurn(roomId)
 
     } else if (phase === 'discard') {
       console.log('[AI] %s entering discard (post-claim or dealer start)', currentTurn)
-      await delay(1000)
       await _aiDiscard(roomId, currentTurn, timeout)
       console.log('[AI] %s discard step done', currentTurn)
       // _aiDiscard → discardTile → triggerAIClaims (handles the next claim window)
@@ -763,9 +760,7 @@ export async function triggerAIClaims(roomId, knownRoom = null) {
 
   // Submit AI claims sequentially to avoid concurrent-transaction 400 errors.
   // useGame.js:doResolve owns resolution — we only submit here, never resolve.
-  // 1-second cosmetic delay per AI so human players can follow the action.
   for (const wind of pendingAI) {
-    await delay(1000)
     const hSnap = await getDocFromServer(handRef(roomId, wind))
     if (!hSnap.exists()) { console.log('[AI] hand missing for', wind); continue }
 

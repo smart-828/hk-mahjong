@@ -22,6 +22,7 @@ import { SEAT_ORDER } from '../engine/tiles.js'
 export function useGame(roomId, myWind, room) {
   const [myHandData, setMyHandData]   = useState(null)   // { hand, exposedMelds }
   const [claimResult, setClaimResult] = useState(null)   // summary shown after each resolution
+  const [visKey, setVisKey]           = useState(0)       // increments on page-visible to force re-subscribe
   const resolvingRef       = useRef(false)
   const drawingRef         = useRef(false)
   const claimResultTimer   = useRef(null)
@@ -31,12 +32,22 @@ export function useGame(roomId, myWind, room) {
     return () => { if (claimResultTimer.current) clearTimeout(claimResultTimer.current) }
   }, [])
 
+  // Re-subscribe to Firestore when the tab/screen becomes visible again after being hidden.
+  // Prevents game lockup when the phone screen locks and unlocks mid-game.
+  useEffect(() => {
+    function onVisChange() {
+      if (document.visibilityState === 'visible') setVisKey(k => k + 1)
+    }
+    document.addEventListener('visibilitychange', onVisChange)
+    return () => document.removeEventListener('visibilitychange', onVisChange)
+  }, [])
+
   // Subscribe to own private hand
   useEffect(() => {
     if (!roomId || !myWind) return
     setMyHandData(null)
     return subscribeToHand(roomId, myWind, setMyHandData)
-  }, [roomId, myWind])
+  }, [roomId, myWind, visKey])
 
   // Auto-resolve claim window when all non-discarders have submitted or deadline passed.
   // When the deadline is still in the future we schedule a timer so it fires automatically

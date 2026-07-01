@@ -27,6 +27,7 @@ export default function App() {
   const [page, setPage]               = useState('lobby')   // 'lobby' | 'room'
   const [currentRoom, setCurrentRoom] = useState(null)
   const [activeGames, setActiveGames] = useState([])
+  const [roomVisKey, setRoomVisKey]   = useState(0)  // increments on page-visible to force room re-subscribe
 
   // Derive which wind seat the current user occupies in the current room
   const myWind = currentRoom
@@ -59,6 +60,15 @@ export default function App() {
     return unsub
   }, [user])
 
+  // Re-subscribe when the tab/screen becomes visible again (fixes game lockup after phone screen lock)
+  useEffect(() => {
+    function onVisChange() {
+      if (document.visibilityState === 'visible') setRoomVisKey(k => k + 1)
+    }
+    document.addEventListener('visibilitychange', onVisChange)
+    return () => document.removeEventListener('visibilitychange', onVisChange)
+  }, [])
+
   // Subscribe to current room when in room page
   useEffect(() => {
     if (!currentRoom?.id) return
@@ -66,7 +76,7 @@ export default function App() {
       setCurrentRoom(updated)
     })
     return unsub
-  }, [currentRoom?.id])
+  }, [currentRoom?.id, roomVisKey])
 
   function openRoom(room) {
     setCurrentRoom(room)

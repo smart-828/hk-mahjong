@@ -117,8 +117,7 @@ function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor,
       <div style={{
         width:      IS_MOBILE ? 7 : 5,
         flexShrink: 0,
-        background: isCurrentTurn ? '#2ecc71' : isLastActor ? 'rgba(212,160,23,0.35)' : C.darker,
-        transition: 'background 0.2s',
+        background: isCurrentTurn ? '#2ecc71' : 'transparent',
       }} />
 
       {/* Row content */}
