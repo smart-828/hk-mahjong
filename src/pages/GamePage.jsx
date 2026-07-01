@@ -6,6 +6,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import MahjongTile from '../components/tiles/MahjongTile.jsx'
 import { t } from '../i18n/translations.js'
 import { tileBase, SEAT_ORDER } from '../engine/tiles.js'
+import { subscribeToChat, sendMessage } from '../firebase/chat.js'
 
 // ── Constants ─────────────────────────────────────────────────
 const WIND_CHAR  = { east: '東', south: '南', west: '西', north: '北' }
@@ -809,11 +810,181 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
   )
 }
 
+// ── ChatDrawer ────────────────────────────────────────────────
+
+const CHAT_BADGE = { east: '#c0392b', south: '#27ae60', west: '#2980b9', north: '#8e44ad' }
+
+function ChatDrawer({ messages, myWind, myName, lang, onClose, onSend }) {
+  const [input, setInput] = useState('')
+  const listRef           = useRef(null)
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
+  }, [messages])
+
+  function handleSend() {
+    const text = input.trim()
+    if (!text) return
+    setInput('')
+    onSend(text)
+  }
+
+  return (
+    <div style={{
+      position:      'fixed',
+      bottom:        0,
+      left:          0,
+      right:         0,
+      height:        '45vh',
+      background:    C.card,
+      borderTop:     `2px solid ${C.border}`,
+      display:       'flex',
+      flexDirection: 'column',
+      zIndex:        55,
+      boxShadow:     '0 -4px 24px rgba(0,0,0,0.5)',
+    }}>
+      {/* Header */}
+      <div style={{
+        display:      'flex',
+        alignItems:   'center',
+        padding:      IS_MOBILE ? '10px 16px' : '7px 14px',
+        borderBottom: `1px solid ${C.border}`,
+        flexShrink:   0,
+      }}>
+        <span style={{ flex: 1, fontWeight: 700, fontSize: IS_MOBILE ? FS.lg : FS.base, color: C.text }}>
+          {lang === 'zh' ? '聊天' : 'Chat'}
+        </span>
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none',
+          color: C.muted, fontSize: IS_MOBILE ? 28 : 20, cursor: 'pointer', padding: 4,
+        }}>✕</button>
+      </div>
+
+      {/* Message list */}
+      <div ref={listRef} style={{
+        flex:          1,
+        overflowY:     'auto',
+        padding:       IS_MOBILE ? '10px 12px' : '8px 10px',
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           IS_MOBILE ? 10 : 7,
+      }}>
+        {messages.length === 0 && (
+          <div style={{ color: C.dim, fontSize: FS.xs, textAlign: 'center', paddingTop: 20 }}>
+            {lang === 'zh' ? '尚無訊息' : 'No messages yet'}
+          </div>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div style={{
+              width:          IS_MOBILE ? 28 : 22,
+              height:         IS_MOBILE ? 28 : 22,
+              borderRadius:   4,
+              background:     CHAT_BADGE[msg.wind] ?? C.darker,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              fontSize:       IS_MOBILE ? FS.xs : 10,
+              fontWeight:     700,
+              color:          '#fff',
+              flexShrink:     0,
+            }}>
+              {WIND_CHAR[msg.wind] ?? '?'}
+            </div>
+            <div style={{ flex: 1, wordBreak: 'break-word' }}>
+              <span style={{ fontSize: IS_MOBILE ? FS.xs : 11, color: C.muted, fontWeight: 600 }}>
+                {msg.name}:{' '}
+              </span>
+              <span style={{ fontSize: IS_MOBILE ? FS.sm : FS.xs, color: C.text }}>{msg.text}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input row */}
+      <div style={{
+        display:    'flex',
+        gap:        8,
+        padding:    IS_MOBILE ? '10px 12px' : '8px 10px',
+        borderTop:  `1px solid ${C.border}`,
+        flexShrink: 0,
+      }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+          placeholder={lang === 'zh' ? '輸入訊息…' : 'Type a message…'}
+          maxLength={200}
+          style={{
+            flex:         1,
+            background:   C.darker,
+            border:       `1px solid ${C.border}`,
+            borderRadius: 8,
+            padding:      IS_MOBILE ? '12px 14px' : '8px 10px',
+            fontSize:     IS_MOBILE ? FS.base : FS.sm,
+            color:        C.text,
+            outline:      'none',
+          }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim()}
+          style={{
+            background:   input.trim() ? '#0f3460' : C.border,
+            border:       `1px solid ${input.trim() ? '#1a6ab5' : C.dim}`,
+            borderRadius: 8,
+            color:        input.trim() ? C.text : C.dim,
+            padding:      IS_MOBILE ? '12px 18px' : '8px 12px',
+            fontSize:     IS_MOBILE ? FS.base : FS.sm,
+            fontWeight:   700,
+            cursor:       input.trim() ? 'pointer' : 'default',
+          }}
+        >
+          {lang === 'zh' ? '送出' : 'Send'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── GamePage ──────────────────────────────────────────────────
 
 export default function GamePage({ room, myWind, game, lang, onBack }) {
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected]   = useState(null)
+  const [chatOpen, setChatOpen]   = useState(false)
+  const [chatMsgs, setChatMsgs]   = useState([])
+  const [unread, setUnread]       = useState(0)
+  const chatOpenRef  = useRef(false)
+  const prevCountRef = useRef(0)
   const landscape = useOrientation()
+
+  // Chat subscription — tracks unread count when drawer is closed
+  useEffect(() => {
+    if (!room?.id) return
+    return subscribeToChat(room.id, msgs => {
+      setChatMsgs(msgs)
+      if (!chatOpenRef.current) {
+        const newCount = msgs.length - prevCountRef.current
+        if (newCount > 0) setUnread(u => u + newCount)
+      }
+      prevCountRef.current = msgs.length
+    })
+  }, [room?.id])
+
+  function openChat() {
+    chatOpenRef.current = true
+    setChatOpen(true)
+    setUnread(0)
+    prevCountRef.current = chatMsgs.length
+  }
+  function closeChat() {
+    chatOpenRef.current = false
+    setChatOpen(false)
+  }
+  function handleChatSend(text) {
+    const myName = room.seats?.[myWind]?.name ?? myWind
+    sendMessage(room.id, myWind, myName, text).catch(console.error)
+  }
 
   const {
     myHand, myExposedMelds, myFlowers, actions,
@@ -1205,6 +1376,64 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
           room={room}
           lang={lang}
         />
+      )}
+
+      {/* ── Chat drawer ──────────────────────────────────────── */}
+      {chatOpen && (
+        <ChatDrawer
+          messages={chatMsgs}
+          myWind={myWind}
+          myName={room.seats?.[myWind]?.name ?? myWind}
+          lang={lang}
+          onClose={closeChat}
+          onSend={handleChatSend}
+        />
+      )}
+
+      {/* ── Floating chat button ─────────────────────────────── */}
+      {!chatOpen && (
+        <button
+          onClick={openChat}
+          style={{
+            position:       'fixed',
+            bottom:         IS_MOBILE ? 112 : 76,
+            right:          16,
+            width:          IS_MOBILE ? 54 : 44,
+            height:         IS_MOBILE ? 54 : 44,
+            borderRadius:   '50%',
+            background:     C.card,
+            border:         `2px solid ${C.border}`,
+            color:          C.text,
+            fontSize:       IS_MOBILE ? 26 : 20,
+            cursor:         'pointer',
+            zIndex:         50,
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            boxShadow:      '0 2px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          💬
+          {unread > 0 && (
+            <div style={{
+              position:       'absolute',
+              top:            -4,
+              right:          -4,
+              background:     '#e74c3c',
+              color:          '#fff',
+              borderRadius:   '50%',
+              width:          IS_MOBILE ? 22 : 18,
+              height:         IS_MOBILE ? 22 : 18,
+              fontSize:       IS_MOBILE ? 12 : 10,
+              fontWeight:     700,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+            }}>
+              {unread > 9 ? '9+' : unread}
+            </div>
+          )}
+        </button>
       )}
     </div>
   )
