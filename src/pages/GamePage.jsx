@@ -148,9 +148,9 @@ function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor,
         {/* Exposed melds — wraps to multiple lines when long */}
         <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexWrap: 'wrap', flex: 1, paddingTop: 2 }}>
           {(exposedMelds ?? []).map((meld, i) => (
-            <MeldGroup key={i} meld={meld} size="md" concealed />
+            <MeldGroup key={i} meld={meld} size="opp" concealed />
           ))}
-          <FlowerGroup flowers={flowers} size="md" />
+          <FlowerGroup flowers={flowers} size="opp" />
         </div>
       </div>
     </div>
@@ -280,7 +280,6 @@ function MyHand({ hand, exposedMelds, flowers, selected, onTilePointerDown, drag
 const btnBase = {
   padding:      IS_MOBILE ? '18px 28px' : '10px 16px',
   borderRadius: IS_MOBILE ? 14 : 8,
-  border:       'none',
   fontSize:     IS_MOBILE ? 22 : FS.base,
   fontWeight:   700,
   cursor:       'pointer',
@@ -289,7 +288,13 @@ const btnBase = {
   transition:   'opacity 0.15s',
 }
 
-function Btn({ label, color = C.blue, disabled = false, onClick }) {
+// Button color presets — fill / border / text
+const B_WIN     = { color: '#b8860b', borderColor: '#ffd700', textColor: '#fff' }
+const B_ACTION  = { color: '#1a3a2a', borderColor: '#2ecc71', textColor: '#fff' }
+const B_PASS    = { color: '#1a1a3a', borderColor: '#6666aa', textColor: '#aaa' }
+const B_DISCARD = { color: '#0f3460', borderColor: '#1a6ab5', textColor: '#fff' }
+
+function Btn({ label, color = '#0f3460', borderColor, textColor = C.text, disabled = false, onClick }) {
   return (
     <button
       disabled={disabled}
@@ -297,7 +302,8 @@ function Btn({ label, color = C.blue, disabled = false, onClick }) {
       style={{
         ...btnBase,
         background: disabled ? C.border : color,
-        color:      disabled ? C.dim : C.text,
+        border:     `2px solid ${disabled ? C.dim : (borderColor ?? color)}`,
+        color:      disabled ? C.dim : textColor,
         cursor:     disabled ? 'not-allowed' : 'pointer',
         opacity:    disabled ? 0.7 : 1,
       }}
@@ -389,7 +395,7 @@ function ActionBar({
           label={actions.mustDrawDead
             ? (lang === 'zh' ? '摸嶺牌' : 'Draw (Kong)')
             : t(lang, 'draw')}
-          color={C.blue}
+          {...B_ACTION}
           onClick={actions.mustDrawDead ? onDrawDead : onDraw}
         />
       </div>
@@ -403,28 +409,28 @@ function ActionBar({
         {/* Self-draw win / special actions */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {actions.canSelfDrawWin && (
-            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} color={C.gold} onClick={onSelfDrawWin} />
+            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} {...B_WIN} onClick={onSelfDrawWin} />
           )}
           {(actions.concealedKongs ?? []).map(base => (
             <Btn key={base}
-              label={lang === 'zh' ? `暗槓 ${tileBaseName(base)}` : `Hidden Kong`}
-              color={C.blue} onClick={() => onConcealedKong(base)} />
+              label={lang === 'zh' ? `暗槓 ${tileBaseName(base)}` : 'Hidden Kong'}
+              {...B_ACTION} onClick={() => onConcealedKong(base)} />
           ))}
           {(actions.addedKongs ?? []).map(base => (
             <Btn key={base}
               label={lang === 'zh' ? `加槓 ${tileBaseName(base)}` : `+Kong ${tileBaseName(base)}`}
-              color={C.blue} onClick={() => onAddedKong(base)} />
+              {...B_ACTION} onClick={() => onAddedKong(base)} />
           ))}
         </div>
 
-        {/* Discard button — subtle outline when no tile, filled primary when selected */}
+        {/* Discard button — subtle outline when no tile selected, filled when ready */}
         <button
           onClick={selected ? onDiscard : undefined}
           style={{
             ...btnBase,
-            background: selected ? C.blue : 'transparent',
-            color:      C.text,
-            border:     `2px solid ${selected ? C.blue : 'rgba(245,242,232,0.25)'}`,
+            background: selected ? B_DISCARD.color : 'transparent',
+            color:      selected ? B_DISCARD.textColor : C.muted,
+            border:     `2px solid ${selected ? B_DISCARD.borderColor : 'rgba(245,242,232,0.2)'}`,
             cursor:     selected ? 'pointer' : 'default',
           }}
         >
@@ -467,26 +473,26 @@ function ActionBar({
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {actions.canWin && (
-            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} color={C.gold} onClick={() => onClaim('win')} />
+            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} {...B_WIN} onClick={() => onClaim('win')} />
           )}
           {!actions.canWin && actions.winFaan !== null && (
             <Btn
               disabled
               label={`${lang === 'zh' ? '胡' : 'Win'} — ${actions.winFaan}${lang === 'zh' ? '番' : ' faan'} (${lang === 'zh' ? `需${minFaan}番` : `need ${minFaan}`})`}
-              color={C.gold}
+              {...B_WIN}
               onClick={undefined}
             />
           )}
           {actions.canKong && (
-            <Btn label={t(lang, 'kong')} color={C.blue} onClick={() => onClaim('kong')} />
+            <Btn label={t(lang, 'kong')} {...B_ACTION} onClick={() => onClaim('kong')} />
           )}
           {actions.canPong && (
-            <Btn label={t(lang, 'pong')} color={C.blue} onClick={() => onClaim('pong')} />
+            <Btn label={t(lang, 'pong')} {...B_ACTION} onClick={() => onClaim('pong')} />
           )}
           {chowOptions.length > 0 && !chowOpen && (
             <Btn
               label={chowOptions.length === 1 ? t(lang, 'chow') : `${t(lang, 'chow')} ▾`}
-              color={C.blue}
+              {...B_ACTION}
               onClick={() => {
                 if (chowOptions.length === 1) {
                   console.log('[chow-tap] single option — tiles=%o', chowOptions[0].tiles)
@@ -498,7 +504,7 @@ function ActionBar({
               }}
             />
           )}
-          <Btn label={t(lang, 'pass')} color={C.darker} onClick={onPass} />
+          <Btn label={t(lang, 'pass')} {...B_PASS} onClick={onPass} />
         </div>
 
         {/* Chow option picker */}
@@ -515,11 +521,12 @@ function ActionBar({
                 }}
                 style={{
                   ...btnBase,
-                  background: C.blue,
-                  color:      C.text,
-                  display:    'flex',
-                  alignItems: 'center',
-                  gap:        6,
+                  background:  B_ACTION.color,
+                  border:      `2px solid ${B_ACTION.borderColor}`,
+                  color:       B_ACTION.textColor,
+                  display:     'flex',
+                  alignItems:  'center',
+                  gap:         6,
                 }}
               >
                 {opt.tiles.map((tile, j) => (
