@@ -14,10 +14,13 @@ import { tileBase, isHonour, isTerminal, isTerminalOrHonour, WINDS, DRAGONS } fr
 export function isWinningHand(hand, exposedMelds = [], context = {}) {
   const { settings = {} } = context
 
-  // Must have exactly 14 tiles total (hand + exposed tiles)
+  // Must have the correct total tile count.
+  // Each kong meld adds 1 extra tile beyond the standard 14
+  // (the dead wall replacement draw), so the expected total is 14 + kongCount.
   const exposedTileCount = exposedMelds.reduce((sum, m) => sum + m.tiles.length, 0)
-  const totalTiles = hand.length + exposedTileCount
-  if (totalTiles !== 14) return false
+  const kongCount        = exposedMelds.filter(m => m.type?.startsWith('kong')).length
+  const totalTiles       = hand.length + exposedTileCount
+  if (totalTiles !== 14 + kongCount) return false
 
   // ── Check special hands first ──────────────────────────────
   if (exposedMelds.length === 0) {

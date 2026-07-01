@@ -532,11 +532,46 @@ export function getAvailableActions(room, myHand, myExposedMelds, myWind) {
   const prevailingWind = room.game?.prevailingWind || 'east'
 
   if (phase === 'discard' && currentTurn === myWind) {
+    // ── Self-draw win detection ───────────────────────────────
+    const _totalTiles = myHand.length +
+      (myExposedMelds ?? []).reduce((s, m) => s + m.tiles.length, 0)
+    const _kongCount  = (myExposedMelds ?? []).filter(m => m.type?.startsWith('kong')).length
+    const _structural = canWinSelfDraw(myHand, myWind, myExposedMelds, myFlowers, settings, prevailingWind)
+
+    let canSelfDrawWin = false
+    let selfDrawFaan   = null
+    if (_structural) {
+      const winCtx = {
+        seat:           myWind,
+        prevailingWind,
+        selfDraw:       true,
+        discarderSeat:  null,
+        isLastTile:     (room.hand.tilesLeft ?? 1) === 0,
+        winAfterKong:   false,
+        robbingKong:    false,
+        isHeavenly:     false,
+        isEarthly:      false,
+        doubleKong:     false,
+      }
+      const sc    = calcFaan(myHand, myExposedMelds, myFlowers, winCtx, settings)
+      selfDrawFaan   = sc.faan
+      canSelfDrawWin = sc.meetsMinimum
+      console.log('[getAvailableActions] self-draw win wind=%s structural=true faan=%s meets=%s',
+        myWind, sc.faan, sc.meetsMinimum)
+    }
+
+    console.log(
+      '[getAvailableActions] discard wind=%s handLen=%d melds=%d totalTiles=%d kongs=%d structural=%s canWin=%s | hand=%o melds=%o',
+      myWind, myHand.length, (myExposedMelds ?? []).length,
+      _totalTiles, _kongCount, _structural, canSelfDrawWin, myHand, myExposedMelds,
+    )
+
     return {
       mustDiscard:     true,
       concealedKongs:  canKongConcealed(myHand),
       addedKongs:      canKongAdded(myHand, myExposedMelds),
-      canSelfDrawWin:  canWinSelfDraw(myHand, myWind, myExposedMelds, myFlowers, settings, prevailingWind),
+      canSelfDrawWin,
+      selfDrawFaan,
     }
   }
 
