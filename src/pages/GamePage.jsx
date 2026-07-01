@@ -1486,7 +1486,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
         display:      'flex',
         alignItems:   'center',
         gap:          10,
-        padding:      '10px 12px',
+        padding:      '10px 52px 10px 12px',
         background:   C.card,
         borderBottom: `1px solid ${C.border}`,
         flexShrink:   0,

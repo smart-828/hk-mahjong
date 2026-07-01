@@ -27,7 +27,7 @@ const S = {
   },
   header: {
     background:   C.card,
-    padding:      '14px 20px',
+    padding:      '14px 52px 14px 20px',
     display:      'flex',
     alignItems:   'center',
     gap:          12,

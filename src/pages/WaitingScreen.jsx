@@ -20,7 +20,7 @@ const S = {
   },
   header: {
     background:   '#16213e',
-    padding:      IS_MOBILE ? '18px 24px' : '14px 20px',
+    padding:      IS_MOBILE ? '18px 52px 18px 24px' : '14px 52px 14px 20px',
     display:      'flex',
     alignItems:   'center',
     gap:          12,

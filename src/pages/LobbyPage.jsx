@@ -14,7 +14,7 @@ const S = {
   },
   header: {
     background: '#16213e',
-    padding: '14px 20px',
+    padding: '14px 52px 14px 20px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
