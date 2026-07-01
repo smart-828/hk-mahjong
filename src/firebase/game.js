@@ -20,6 +20,7 @@ import {
   applyKongFromDiscard, applyKongConcealed, applyKongAdded,
 } from '../engine/claims.js'
 import { tileBase, nextSeat, SEAT_ORDER } from '../engine/tiles.js'
+import { isWinningHand } from '../engine/winning.js'
 import { calcFaan, calcPoints, calcPayments } from '../engine/scoring.js'
 
 // rooms/{roomId}/hands/{wind} — private hand per player
@@ -614,15 +615,124 @@ function _scoreTile(tileId, hand) {
   return 2 + conn + flexible
 }
 
-// Return the tile ID to discard (lowest score wins the cut).
-function _aiChooseDiscard(hand) {
-  let worst = hand[0]
-  let low   = _scoreTile(hand[0], hand)
-  for (const t of hand.slice(1)) {
-    const s = _scoreTile(t, hand)
-    if (s < low) { low = s; worst = t }
+// ── Safety scoring ─────────────────────────────────────────────
+
+// Build {tileBase → count} from all publicly visible tiles:
+// discard pool + every seat's exposed melds.
+function _buildSafetyMap(discardPool = [], allExposedMelds = {}) {
+  const counts = {}
+  for (const { tileId } of discardPool) {
+    const b = tileBase(tileId)
+    counts[b] = (counts[b] || 0) + 1
   }
-  return worst
+  for (const seatMelds of Object.values(allExposedMelds)) {
+    if (!Array.isArray(seatMelds)) continue
+    for (const meld of seatMelds) {
+      if (!Array.isArray(meld?.tiles)) continue
+      for (const tid of meld.tiles) {
+        const b = tileBase(tid)
+        counts[b] = (counts[b] || 0) + 1
+      }
+    }
+  }
+  return counts
+}
+
+// How safe is it to discard this tile (higher = safer).
+function _safetyScore(tileId, visibleCounts, tilesLeft) {
+  const base = tileBase(tileId)
+  const seen = visibleCounts[base] || 0
+  if (seen >= 3) return 10   // ≥3 copies publicly visible → very safe
+  if (seen === 2) return 5
+  if (seen === 1) return 2
+  const isHon = !base.match(/^(wan|tong|suo)\d$/)
+  return (isHon && tilesLeft < 30) ? -2 : 0  // unseen honour in late game → dangerous
+}
+
+// ── 聽牌 (ready hand) detection ────────────────────────────────
+
+const _READY_BASES = [
+  'wan1','wan2','wan3','wan4','wan5','wan6','wan7','wan8','wan9',
+  'tong1','tong2','tong3','tong4','tong5','tong6','tong7','tong8','tong9',
+  'suo1','suo2','suo3','suo4','suo5','suo6','suo7','suo8','suo9',
+  'east','south','west','north',
+  'zhong','fa','bai',
+]
+
+// Check if a 13-tile-equivalent hand (private tiles + exposed counts to 13)
+// is one tile away from winning.  The '_x' suffix on test tiles is a
+// throwaway id that won't collide with any real tile id in the deck.
+function _isReadyHand(hand13, exposedMelds = []) {
+  const waitingFor = []
+  for (const base of _READY_BASES) {
+    if (isWinningHand([...hand13, `${base}_x`], exposedMelds, {})) {
+      waitingFor.push(base)
+    }
+  }
+  return waitingFor.length > 0 ? { isReady: true, waitingFor } : { isReady: false }
+}
+
+// Return the tile ID to discard.
+// 1. Try every candidate; if discarding it leaves the hand 聽牌, pick the
+//    safest such tile.
+// 2. Otherwise pick lowest (connectivity - safetyScore).
+// 3. On any error fall back to plain _scoreTile (existing behaviour).
+function _aiChooseDiscard(hand, myExposedMelds = [], room = null) {
+  try {
+    const discardPool     = room?.hand?.discardPool    ?? []
+    const allExposedMelds = room?.hand?.exposedMelds   ?? {}
+    const tilesLeft       = room?.hand?.tilesLeft      ?? 999
+    const safetyMap       = _buildSafetyMap(discardPool, allExposedMelds)
+
+    // ── 聽牌 detection ──────────────────────────────────────────
+    let readyCandidates = null
+    try {
+      readyCandidates = []
+      for (const cid of hand) {
+        const hand13 = hand.filter(t => t !== cid)
+        const ready  = _isReadyHand(hand13, myExposedMelds)
+        if (ready.isReady) readyCandidates.push({ cid, waitingFor: ready.waitingFor })
+      }
+    } catch (e) {
+      console.warn('[AI] 聽牌 detection error:', e.message)
+      readyCandidates = null
+    }
+
+    if (readyCandidates?.length > 0) {
+      // Multiple tiles might enable 聽牌; pick the one that's safest to lose.
+      let best       = readyCandidates[0]
+      let bestSafety = _safetyScore(best.cid, safetyMap, tilesLeft)
+      for (const rc of readyCandidates.slice(1)) {
+        const s = _safetyScore(rc.cid, safetyMap, tilesLeft)
+        if (s > bestSafety) { bestSafety = s; best = rc }
+      }
+      console.log('[AI] 聽牌! discard=%s safety=%d waiting=%s',
+        best.cid, bestSafety, best.waitingFor.join(','))
+      return best.cid
+    }
+
+    // ── Safe discard: lowest (connectivity - safety) ───────────
+    let worst    = hand[0]
+    let lowScore = _scoreTile(hand[0], hand) - _safetyScore(hand[0], safetyMap, tilesLeft)
+    for (const t of hand.slice(1)) {
+      const score = _scoreTile(t, hand) - _safetyScore(t, safetyMap, tilesLeft)
+      if (score < lowScore) { lowScore = score; worst = t }
+    }
+    console.log('[AI] safe discard=%s conn=%d safety=%d',
+      worst, _scoreTile(worst, hand), _safetyScore(worst, safetyMap, tilesLeft))
+    return worst
+
+  } catch (e) {
+    // Fallback: original simple logic
+    console.warn('[AI] _aiChooseDiscard error, falling back:', e.message)
+    let worst = hand[0]
+    let low   = _scoreTile(hand[0], hand)
+    for (const t of hand.slice(1)) {
+      const s = _scoreTile(t, hand)
+      if (s < low) { low = s; worst = t }
+    }
+    return worst
+  }
 }
 
 // Return the best claim { type, tiles? } an AI can make, or null (pass).
@@ -643,6 +753,18 @@ function _aiChooseClaim(hand, exposedMelds, tileId, discardedBy, mySeat, room) {
     if (sc.meetsMinimum) return { type: 'win' }
     console.log('[AI] %s: hand wins but faan=%d < min=%d, skipping win claim', mySeat, sc.faan, settings?.minFaan ?? 3)
   }
+
+  // If 聽牌, skip pong/chow/kong — claiming would restructure the hand
+  // and break the ready state.  Win was already handled above.
+  try {
+    const ready = _isReadyHand(hand, exposedMelds)
+    if (ready.isReady) {
+      console.log('[AI] %s is 聽牌 (waiting: %s) — passing %s',
+        mySeat, ready.waitingFor.join(','), tileBase(tileId))
+      return null
+    }
+  } catch { /* on error, fall through to normal claim logic */ }
+
   if (canKongFromDiscard(hand, tileId))
     return { type: 'kong' }
   if (canPong(hand, tileId))
@@ -655,16 +777,23 @@ function _aiChooseClaim(hand, exposedMelds, tileId, discardedBy, mySeat, room) {
   return null  // pass
 }
 
-// Read an AI's private hand then discard the weakest tile.
-async function _aiDiscard(roomId, wind, claimTimeoutHours) {
+// Read an AI's private hand then discard the chosen tile.
+async function _aiDiscard(roomId, wind, claimTimeoutHours, room = null) {
   // Server read: hand was just updated by drawTile/resolveClaims — bypass stale cache
   const hSnap = await getDocFromServer(handRef(roomId, wind))
   if (!hSnap.exists()) { console.warn('[AI] _aiDiscard %s: hand doc missing', wind); return }
-  const { hand } = hSnap.data()
+  const { hand, exposedMelds: myExposedMelds } = hSnap.data()
   console.log('[AI] _aiDiscard %s: hand has %d tiles', wind, hand?.length ?? 0)
   if (!hand?.length) { console.warn('[AI] _aiDiscard %s: empty hand, skipping', wind); return }
-  const tileId = _aiChooseDiscard(hand)
+  const tileId = _aiChooseDiscard(hand, myExposedMelds ?? [], room)
   if (!tileId) { console.warn('[AI] _aiDiscard %s: _aiChooseDiscard returned null', wind); return }
+  // Verify the chosen tile is actually in hand (safety net)
+  if (!hand.includes(tileId)) {
+    console.warn('[AI] _aiDiscard %s: chosen tile %s not in hand — falling back', wind, tileId)
+    const fallback = hand[0]
+    await discardTile(roomId, wind, fallback, claimTimeoutHours)
+    return
+  }
   console.log('[AI] _aiDiscard %s: calling discardTile(%s)', wind, tileId)
   try {
     await discardTile(roomId, wind, tileId, claimTimeoutHours)
@@ -707,7 +836,7 @@ export async function triggerAITurn(roomId) {
 
     } else if (phase === 'discard') {
       console.log('[AI] %s entering discard (post-claim or dealer start)', currentTurn)
-      await _aiDiscard(roomId, currentTurn, timeout)
+      await _aiDiscard(roomId, currentTurn, timeout, room)
       console.log('[AI] %s discard step done', currentTurn)
       // _aiDiscard → discardTile → triggerAIClaims (handles the next claim window)
     }
