@@ -13,9 +13,9 @@ import { tileBase } from '../../engine/tiles.js'
 
 // ── Tile dimensions ───────────────────────────────────────────
 const SIZES = {
-  lg: { w: 40, h: 54, fs1: 22, fs2: 19, fsX: 9  },  // fs1=honour, fs2=wan chars, fsX=bonus label
-  sm: { w: 38, h: 50, fs1: 20, fs2: 17, fsX: 8  },
-  md: { w: 28, h: 38, fs1: 14, fs2: 12, fsX: 6  },
+  lg: { w: 44, h: 59, fs1: 24, fs2: 21, fsX: 10 },  // fs1=honour, fs2=wan chars, fsX=bonus label
+  sm: { w: 42, h: 55, fs1: 22, fs2: 19, fsX: 9  },
+  md: { w: 31, h: 42, fs1: 15, fs2: 13, fsX: 7  },
 }
 
 // ── Left strip colours ─────────────────────────────────────────

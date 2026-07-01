@@ -11,6 +11,31 @@ import { tileBase, SEAT_ORDER } from '../engine/tiles.js'
 const WIND_CHAR  = { east: '東', south: '南', west: '西', north: '北' }
 const WIND_LABEL = { east: 'East', south: 'South', west: 'West', north: 'North' }
 
+// Mobile detection — computed once at load time from viewport width
+const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth <= 480
+// Font scale: ~20% larger on mobile
+const FS = {
+  xxs:  IS_MOBILE ? 12 : 10,
+  xs:   IS_MOBILE ? 13 : 11,
+  sm:   IS_MOBILE ? 14 : 12,
+  base: IS_MOBILE ? 17 : 14,
+  lg:   IS_MOBILE ? 18 : 15,
+}
+
+// Reactive orientation detection — responds to device rotation
+function useOrientation() {
+  const [landscape, setLandscape] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)')
+    const handler = e => setLandscape(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return landscape
+}
+
 // ── Colour palette (consistent with rest of app) ──────────────
 const C = {
   bg:       '#1a1a2e',
@@ -83,21 +108,20 @@ function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor 
   return (
     <div style={{
       display:      'flex',
-      alignItems:   'center',
+      alignItems:   'flex-start',
       gap:          8,
       padding:      '6px 12px',
       background:   isLastActor ? 'rgba(212,160,23,0.07)' : C.card,
       borderBottom: `1px solid ${C.border}`,
       borderLeft:   isLastActor ? `3px solid ${C.gold}` : '3px solid transparent',
       minHeight:    52,
-      overflow:     'hidden',
     }}>
       {/* Wind badge */}
       <div style={{
-        width: 28, height: 28, borderRadius: 4,
+        width: 30, height: 30, borderRadius: 4, marginTop: 2,
         background: isLastActor ? 'rgba(212,160,23,0.18)' : C.darker,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 14, fontWeight: 700,
+        fontSize: FS.base, fontWeight: 700,
         color: isLastActor ? C.gold : C.text,
         flexShrink: 0,
       }}>
@@ -105,17 +129,17 @@ function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor 
       </div>
 
       {/* Name + hidden count */}
-      <div style={{ flexShrink: 0 }}>
-        <div style={{ fontSize: 12, color: C.text, fontWeight: 600, maxWidth: 80, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+      <div style={{ flexShrink: 0, paddingTop: 2 }}>
+        <div style={{ fontSize: FS.sm, color: C.text, fontWeight: 600, maxWidth: 90, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
           {name}
         </div>
-        <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+        <div style={{ fontSize: FS.xs, color: C.muted, marginTop: 1 }}>
           🀫 × {handSize ?? 13}
         </div>
       </div>
 
-      {/* Exposed melds */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
+      {/* Exposed melds — wraps to multiple lines when long */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexWrap: 'wrap', flex: 1, paddingTop: 2 }}>
         {(exposedMelds ?? []).map((meld, i) => (
           <MeldGroup key={i} meld={meld} size="md" concealed />
         ))}
@@ -127,7 +151,7 @@ function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor 
 
 // ── Row 2: Discard pool ───────────────────────────────────────
 
-function DiscardPool({ discardPool, lastDiscard }) {
+function DiscardPool({ discardPool, lastDiscard, landscape }) {
   const pool       = discardPool ?? []
   const lastTileId = lastDiscard?.tileId
   // Show the last tile separately (larger) only while it remains the pool's
@@ -145,8 +169,9 @@ function DiscardPool({ discardPool, lastDiscard }) {
       padding:    '8px 10px',
       overflowY:  'auto',
       borderBottom: `1px solid ${C.border}`,
+      minHeight:  landscape ? 90 : 50,
     }}>
-      <div style={{ fontSize: 10, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+      <div style={{ fontSize: FS.xxs, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         Discard pool
       </div>
       {pool.length === 0 ? (
@@ -161,7 +186,7 @@ function DiscardPool({ discardPool, lastDiscard }) {
           {lastIsInPool && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <MahjongTile tileId={lastTileId} size="lg" highlighted />
-              <span style={{ fontSize: 9, color: C.red, fontWeight: 700 }}>最新</span>
+              <span style={{ fontSize: FS.xxs, color: C.red, fontWeight: 700 }}>最新</span>
             </div>
           )}
         </div>
@@ -172,8 +197,8 @@ function DiscardPool({ discardPool, lastDiscard }) {
 
 // ── Row 3: My hand ────────────────────────────────────────────
 
-// sm tile width (38) + gap (4) = 42 px per slot — for drag shift animation
-const TILE_SLOT = 42
+// sm tile width (42) + gap (4) = 46 px per slot — for drag shift animation
+const TILE_SLOT = 46
 
 function MyHand({ hand, exposedMelds, flowers, selected, onTilePointerDown, dragUi }) {
   return (
@@ -183,12 +208,12 @@ function MyHand({ hand, exposedMelds, flowers, selected, onTilePointerDown, drag
       borderTop:    `1px solid ${C.border}`,
       borderBottom: `1px solid ${C.border}`,
     }}>
-      <div style={{ fontSize: 10, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+      <div style={{ fontSize: FS.xxs, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         Your hand
       </div>
 
-      {/* Exposed melds + concealed hand in one scrollable row */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
+      {/* Exposed melds + concealed hand — wraps to second row on small screens */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexWrap: 'wrap', paddingBottom: 4 }}>
         {(exposedMelds ?? []).map((meld, i) => (
           <MeldGroup key={i} meld={meld} size="sm" />
         ))}
@@ -245,10 +270,10 @@ function MyHand({ hand, exposedMelds, flowers, selected, onTilePointerDown, drag
 // ── Row 4: Action bar ─────────────────────────────────────────
 
 const btnBase = {
-  padding:      '10px 16px',
+  padding:      IS_MOBILE ? '11px 16px' : '10px 16px',
   borderRadius: 8,
   border:       'none',
-  fontSize:     14,
+  fontSize:     FS.base,
   fontWeight:   600,
   cursor:       'pointer',
   flexShrink:   0,
@@ -309,7 +334,7 @@ function ActionBar({
   if (phase === 'exhausted') {
     return (
       <div style={barStyle}>
-        <div style={{ color: C.muted, fontSize: 14 }}>Wall exhausted — draw game</div>
+        <div style={{ color: C.muted, fontSize: FS.base }}>Wall exhausted — draw game</div>
       </div>
     )
   }
@@ -321,10 +346,10 @@ function ActionBar({
     const responded2   = SEAT_ORDER.filter(s => s !== discardedBy2 && handState?.claims?.[s]).length
     return (
       <div style={barStyle}>
-        <div style={{ color: C.muted, fontSize: 13 }}>
+        <div style={{ color: C.muted, fontSize: FS.base }}>
           {label}
         </div>
-        <div style={{ color: C.dim, fontSize: 12, marginLeft: 'auto' }}>
+        <div style={{ color: C.dim, fontSize: FS.sm, marginLeft: 'auto' }}>
           {responded2} / 3 responded
         </div>
       </div>
@@ -336,7 +361,7 @@ function ActionBar({
     const turn = handState?.currentTurn
     return (
       <div style={barStyle}>
-        <div style={{ color: C.muted, fontSize: 13 }}>
+        <div style={{ color: C.muted, fontSize: FS.base }}>
           {turn && turn !== myWind
             ? `Waiting for ${WIND_CHAR[turn]}…`
             : 'Waiting…'}
@@ -411,11 +436,11 @@ function ActionBar({
       <div style={{ ...barStyle, flexDirection: 'column', gap: 8 }}>
         {/* Response progress + optional time warning */}
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <div style={{ fontSize: 12, color: C.muted }}>
+          <div style={{ fontSize: FS.sm, color: C.muted }}>
             {responded} / 3 responded
           </div>
           {showCountdown && (
-            <div style={{ fontSize: 11, color: C.red }}>
+            <div style={{ fontSize: FS.xs, color: C.red }}>
               {timeLeft(handState.claimDeadline)} left
             </div>
           )}
@@ -500,7 +525,7 @@ const barStyle = {
   gap:          8,
   borderTop:    `1px solid ${C.border}`,
   flexShrink:   0,
-  minHeight:    64,
+  minHeight:    IS_MOBILE ? 72 : 64,
 }
 
 // ── WinOverlay ────────────────────────────────────────────────
@@ -766,6 +791,7 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
 
 export default function GamePage({ room, myWind, game, lang, onBack }) {
   const [selected, setSelected] = useState(null)
+  const landscape = useOrientation()
 
   const {
     myHand, myExposedMelds, myFlowers, actions,
@@ -996,7 +1022,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
       background:     C.bg,
       color:          C.text,
       fontFamily:     '-apple-system, sans-serif',
-      overflow:       'hidden',
+      overflow:       landscape ? 'auto' : 'hidden',
     }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
@@ -1015,25 +1041,25 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
         >
           ←
         </button>
-        <span style={{ fontWeight: 700, fontSize: 15 }}>{room.roomCode}</span>
+        <span style={{ fontWeight: 700, fontSize: FS.lg }}>{room.roomCode}</span>
         <div style={{
           marginLeft:   'auto',
           display:      'flex',
           alignItems:   'center',
           gap:          12,
         }}>
-          <span style={{ fontSize: 12, color: isMyTurn ? '#2ecc71' : C.muted, fontWeight: 600 }}>
+          <span style={{ fontSize: FS.sm, color: isMyTurn ? '#2ecc71' : C.muted, fontWeight: 600 }}>
             {phaseLabel}
           </span>
           <div style={{
-            fontSize: 11, color: C.muted,
+            fontSize: FS.xs, color: C.muted,
             background: C.darker, borderRadius: 4, padding: '2px 8px',
           }}>
             {tilesLeft} tiles
           </div>
           {myWind && (
             <div style={{
-              fontSize:    13, fontWeight: 700,
+              fontSize:    FS.sm, fontWeight: 700,
               background:  myWind === lastActorWind ? 'rgba(212,160,23,0.18)' : C.red,
               borderRadius: 4, padding: '2px 8px',
               color:       myWind === lastActorWind ? C.gold : '#fff',
@@ -1063,6 +1089,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
       <DiscardPool
         discardPool={handState?.discardPool}
         lastDiscard={handState?.lastDiscard}
+        landscape={landscape}
       />
 
       {/* ── My hand ─────────────────────────────────────────── */}
@@ -1078,7 +1105,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
       {/* ── Action bar ──────────────────────────────────────── */}
       {handNeedsSync ? (
         <div style={barStyle}>
-          <div style={{ color: C.muted, fontSize: 13 }}>Drawing tile…</div>
+          <div style={{ color: C.muted, fontSize: FS.base }}>Drawing tile…</div>
         </div>
       ) : (
         <ActionBar
