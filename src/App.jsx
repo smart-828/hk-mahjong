@@ -11,7 +11,7 @@ import RoomPage from './pages/RoomPage'
 import GamePage from './pages/GamePage'
 import {
   createRoom, joinRoom, claimSeat,
-  setSeatToAI, updateRoomSettings, deleteRoom,
+  setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom,
   subscribeToRoom, subscribeToUserRooms,
 } from './firebase/rooms'
 import { startGame } from './firebase/game'
@@ -131,6 +131,17 @@ export default function App() {
     }
   }
 
+  async function handleLeaveRoom() {
+    if (!currentRoom?.id || !myWind) return
+    try {
+      await leaveRoom(currentRoom.id, myWind)
+      setCurrentRoom(null)
+      setPage('lobby')
+    } catch (err) {
+      console.error('Leave room error:', err)
+    }
+  }
+
   // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return (
@@ -198,6 +209,7 @@ export default function App() {
         onStartGame={handleStartGame}
         onUpdateSettings={handleUpdateSettings}
         onDeleteRoom={handleDeleteRoom}
+        onLeaveRoom={handleLeaveRoom}
         onBack={() => setPage('lobby')}
       />
     )

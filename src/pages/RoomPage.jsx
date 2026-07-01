@@ -249,6 +249,7 @@ export default function RoomPage({
   onSetSeatType,  // host only
   onStartGame,
   onDeleteRoom,
+  onLeaveRoom,
   onBack,
   settings: initialSettings,
   onUpdateSettings,
@@ -411,7 +412,7 @@ export default function RoomPage({
         ) : (
           <div style={{
             textAlign: 'center',
-            color:     '#555',
+            color:     '#aaa',
             fontSize:  IS_MOBILE ? 26 : 14,
             padding:   12,
           }}>
@@ -419,26 +420,40 @@ export default function RoomPage({
           </div>
         )}
 
-        {/* Delete room — host only, danger action */}
-        {isHost && (
+        {/* Danger actions */}
+        {isHost ? (
           <button
             style={{
               ...S.btn,
-              marginTop:   IS_MOBILE ? 8 : 4,
-              background:  'transparent',
-              color:       '#c0392b',
-              border:      '1px solid #c0392b',
-              fontSize:    IS_MOBILE ? 24 : 13,
-              fontWeight:  600,
-              padding:     IS_MOBILE ? '14px 16px' : '10px 16px',
+              marginTop:  IS_MOBILE ? 10 : 6,
+              background: 'transparent',
+              color:      '#e74c3c',
+              border:     `2px solid #e74c3c`,
+              fontSize:   IS_MOBILE ? 26 : 14,
             }}
             onClick={() => {
-              if (window.confirm(lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?')) {
-                onDeleteRoom?.()
-              }
+              const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
+              if (window.confirm(msg)) onDeleteRoom?.()
             }}
           >
-            {lang === 'zh' ? '刪除房間' : 'Delete room'}
+            {lang === 'zh' ? '🗑 刪除房間' : '🗑 Delete Room'}
+          </button>
+        ) : (
+          <button
+            style={{
+              ...S.btn,
+              marginTop:  IS_MOBILE ? 10 : 6,
+              background: 'transparent',
+              color:      '#e67e22',
+              border:     `2px solid #e67e22`,
+              fontSize:   IS_MOBILE ? 26 : 14,
+            }}
+            onClick={() => {
+              const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
+              if (window.confirm(msg)) onLeaveRoom?.()
+            }}
+          >
+            {lang === 'zh' ? '← 離開房間' : '← Leave Room'}
           </button>
         )}
 

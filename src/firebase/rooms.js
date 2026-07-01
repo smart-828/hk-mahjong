@@ -149,6 +149,14 @@ export async function deleteRoom(roomId) {
   await deleteDoc(doc(db, 'rooms', roomId))
 }
 
+// Leave a room — replaces the player's seat with an AI and returns them to lobby
+export async function leaveRoom(roomId, wind) {
+  await updateDoc(doc(db, 'rooms', roomId), {
+    [`seats.${wind}`]: { uid: 'AI', name: 'AI', lang: 'en', type: 'ai', aiLevel: 'aiMedium' },
+    updatedAt: serverTimestamp(),
+  })
+}
+
 // Subscribe to a room (real-time)
 export function subscribeToRoom(roomId, callback) {
   return onSnapshot(doc(db, 'rooms', roomId), snap => {
