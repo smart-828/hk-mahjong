@@ -14,7 +14,7 @@ import {
   createRoom, joinRoom, claimSeat,
   setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom, deleteUserStaleRooms,
   subscribeToRoom, subscribeToUserRooms,
-  setScheduledTime, setInvitedPlayers, fillEmptySeatsWithAI, getAllUsers,
+  saveRoomConfig, fillEmptySeatsWithAI, getAllUsers,
 } from './firebase/rooms'
 import { startGame, startGameWhenReady } from './firebase/game'
 
@@ -113,26 +113,38 @@ export default function App() {
 
   async function handleClaimSeat(wind) {
     await claimSeat(currentRoom.id, wind, user, profile)
-    // Auto-start if all invited players are now seated
     startGameWhenReady(currentRoom.id).catch(console.error)
   }
 
-  async function handleSetScheduledTime(date) {
+  async function handleSetSeatType(wind, type, aiLevel) {
+    await setSeatToAI(currentRoom.id, wind, aiLevel)
+  }
+
+  // Batch-save all room config then return to lobby (for scheduled games)
+  async function handleSaveConfig({ settings, scheduledTime, invitedUids, invitedNames }) {
     if (!currentRoom?.id) return
-    await setScheduledTime(currentRoom.id, date)
+    try {
+      await saveRoomConfig(currentRoom.id, { settings, scheduledTime, invitedUids, invitedNames })
+      setCurrentRoom(null)
+      setPage('lobby')
+      setEditingSettings(false)
+    } catch (err) {
+      console.error('Save config error:', err)
+    }
   }
 
-  async function handleSetInvitedPlayers(uids, names) {
+  // Save settings then start immediately (no schedule)
+  async function handleStartNow({ settings }) {
     if (!currentRoom?.id) return
-    await setInvitedPlayers(currentRoom.id, uids, names)
+    try {
+      await updateRoomSettings(currentRoom.id, settings)
+      await startGame(currentRoom.id)
+    } catch (err) {
+      console.error('Start now error:', err)
+    }
   }
 
-  function handleSaveRoom() {
-    setCurrentRoom(null)
-    setPage('lobby')
-    setEditingSettings(false)
-  }
-
+  // WaitingScreen auto-start: fill empty seats with AI then start
   async function handleAutoStart() {
     if (!currentRoom?.id || currentRoom.status !== 'waiting') return
     try {
@@ -140,23 +152,6 @@ export default function App() {
       await startGame(currentRoom.id)
     } catch (err) {
       console.error('Auto-start error:', err)
-    }
-  }
-
-  async function handleSetSeatType(wind, type, aiLevel) {
-    await setSeatToAI(currentRoom.id, wind, aiLevel)
-  }
-
-  async function handleUpdateSettings(settings) {
-    await updateRoomSettings(currentRoom.id, settings)
-  }
-
-  async function handleStartGame() {
-    if (!currentRoom?.id) return
-    try {
-      await startGame(currentRoom.id)
-    } catch (err) {
-      console.error('Start game error:', err)
     }
   }
 
@@ -287,13 +282,11 @@ export default function App() {
         settings={currentRoom.settings}
         onClaimSeat={handleClaimSeat}
         onSetSeatType={handleSetSeatType}
-        onStartGame={handleStartGame}
-        onUpdateSettings={handleUpdateSettings}
         onDeleteRoom={handleDeleteRoom}
         onLeaveRoom={handleLeaveRoom}
         onBack={() => {
           if (hasSchedule && editingSettings) {
-            setEditingSettings(false)  // return to WaitingScreen
+            setEditingSettings(false)
           } else {
             setCurrentRoom(null); setPage('lobby')
           }
@@ -301,10 +294,9 @@ export default function App() {
         scheduledTime={scheduledDate}
         invitedUids={currentRoom.invitedUids ?? []}
         invitedNames={currentRoom.invitedNames ?? {}}
-        onSetScheduledTime={handleSetScheduledTime}
-        onSetInvitedPlayers={handleSetInvitedPlayers}
         onLoadUsers={getAllUsers}
-        onSave={handleSaveRoom}
+        onSaveConfig={handleSaveConfig}
+        onStartNow={handleStartNow}
       />
     )
   }

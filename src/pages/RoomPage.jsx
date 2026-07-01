@@ -324,30 +324,26 @@ export default function RoomPage({
   lang,
   roomCode,
   isHost,
-  seats,          // { east: {uid, name, type:'human'|'ai', aiLevel, isMe}, ... }
+  seats,
   myUid,
   onClaimSeat,
-  onSetSeatType,  // host only
-  onStartGame,
+  onSetSeatType,
   onDeleteRoom,
   onLeaveRoom,
   onBack,
   settings: initialSettings,
-  onUpdateSettings,
-  // Invite / schedule
-  scheduledTime,        // Date | null
-  invitedUids,          // string[]
-  invitedNames,         // { [uid]: string }
-  onSetScheduledTime,   // (date | null) => void
-  onSetInvitedPlayers,  // (uids, names) => void
-  onLoadUsers,          // () => Promise<user[]>
-  onSave,               // save & return to lobby
+  scheduledTime,    // Date | null — initial value from Firestore
+  invitedUids,      // string[]   — initial value from Firestore
+  invitedNames,     // object     — initial value from Firestore
+  onLoadUsers,
+  onSaveConfig,     // ({ settings, scheduledTime, invitedUids, invitedNames }) => void
+  onStartNow,       // ({ settings }) => void
 }) {
   const [settings, setSettings] = useState(initialSettings || DEFAULT_SETTINGS)
   const [copied, setCopied]     = useState(false)
   const scrollRef               = useRef(null)
 
-  // Schedule state — three separate parts for the custom picker
+  // ── Schedule state (local draft — not saved until Save/Start Now) ──────────
   const _initP = parseSchedParts(scheduledTime)
   const [schedDateStr, setSchedDateStr] = useState(_initP.dateStr)
   const [schedHour, setSchedHour]       = useState(_initP.hour)
@@ -357,37 +353,19 @@ export default function RoomPage({
   const schedDate = schedDateStr
     ? new Date(`${schedDateStr}T${String(schedHour).padStart(2,'0')}:${String(schedMinute).padStart(2,'0')}:00`)
     : null
-  const { uk, hk } = formatBothTimezones(schedDate)
+  const { uk, hk }   = formatBothTimezones(schedDate)
+  const schedIsFuture = schedDate ? schedDate > new Date() : false
 
-  // Sync picker when the Firestore prop changes (another client / round-trip)
-  useEffect(() => {
-    const p = parseSchedParts(scheduledTime)
-    setSchedDateStr(p.dateStr)
-    setSchedHour(p.hour)
-    setSchedMinute(p.minute)
-  }, [scheduledTime])
-
-  // Save to Firestore immediately whenever any picker part changes
-  function commitSched(dateStr, hour, minute) {
-    if (dateStr) {
-      const d = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00`)
-      onSetScheduledTime?.(d)
-    } else {
-      onSetScheduledTime?.(null)
-    }
-  }
-  function handleDateChange(val) { setSchedDateStr(val); commitSched(val, schedHour, schedMinute) }
-  function handleHourChange(h)   { setSchedHour(h);      commitSched(schedDateStr, h, schedMinute) }
-  function handleMinChange(m)    { setSchedMinute(m);    commitSched(schedDateStr, schedHour, m) }
-
-  // Invite modal state
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [allUsers, setAllUsers]               = useState([])
-  const [loadingUsers, setLoadingUsers]       = useState(false)
-  const [pendingInvites, setPendingInvites]   = useState(new Set())
+  // ── Invite state (local draft) ────────────────────────────────────────────
+  const [localInvitedUids,  setLocalInvitedUids]  = useState(invitedUids  ?? [])
+  const [localInvitedNames, setLocalInvitedNames] = useState(invitedNames ?? {})
+  const [showInviteModal,   setShowInviteModal]   = useState(false)
+  const [allUsers,          setAllUsers]           = useState([])
+  const [loadingUsers,      setLoadingUsers]       = useState(false)
+  const [pendingInvites,    setPendingInvites]     = useState(new Set())
 
   async function handleOpenInvite() {
-    setPendingInvites(new Set(invitedUids ?? []))
+    setPendingInvites(new Set(localInvitedUids))
     setShowInviteModal(true)
     setLoadingUsers(true)
     try {
@@ -400,11 +378,13 @@ export default function RoomPage({
     }
   }
 
+  // All setting changes are local-only; committed by Save or Start Now
   function updateSetting(key, value) {
-    const next = { ...settings, [key]: value }
-    setSettings(next)
-    onUpdateSettings?.(next)
+    setSettings(prev => ({ ...prev, [key]: value }))
   }
+  function handleDateChange(val) { setSchedDateStr(val) }
+  function handleHourChange(h)   { setSchedHour(h) }
+  function handleMinChange(m)    { setSchedMinute(m) }
 
   async function copyCode() {
     await navigator.clipboard.writeText(roomCode)
@@ -616,89 +596,94 @@ export default function RoomPage({
                 + {t(lang, 'selectPlayers')}
               </button>
             </div>
-            {(invitedUids ?? []).length === 0 ? (
+            {localInvitedUids.length === 0 ? (
               <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#555' }}>
                 {t(lang, 'noPlayersInvited')}
               </div>
-            ) : (invitedUids ?? []).map(uid => (
+            ) : localInvitedUids.map(uid => (
               <div key={uid} style={{ fontSize: IS_MOBILE ? 20 : 12, color: '#2ecc71', padding: IS_MOBILE ? '5px 0' : '3px 0' }}>
-                ✓ {(invitedNames ?? {})[uid] || uid}
+                ✓ {localInvitedNames[uid] || uid}
               </div>
             ))}
           </div>
         )}
 
-        {/* Start / waiting */}
+        {/* ── Action buttons ────────────────────────────────────── */}
         {isHost ? (
-          <button
-            style={{ ...S.btn, ...(canStart ? S.btnPrimary : S.btnDisabled) }}
-            onClick={canStart ? onStartGame : undefined}
-            disabled={!canStart}
-          >
-            {t(lang, 'startGame')}
-          </button>
-        ) : (
-          <div style={{
-            textAlign: 'center',
-            color:     '#aaa',
-            fontSize:  IS_MOBILE ? 26 : 14,
-            padding:   12,
-          }}>
-            {t(lang, 'waitingForPlayers')}
-          </div>
-        )}
+          <>
+            {/* Start Now — only when NO scheduled time */}
+            {!schedDate && (
+              <button
+                style={{ ...S.btn, ...(canStart ? S.btnPrimary : S.btnDisabled) }}
+                onClick={canStart ? () => onStartNow?.({ settings }) : undefined}
+                disabled={!canStart}
+              >
+                {lang === 'zh' ? '開始遊戲 / Start Now' : '開始遊戲 / Start Now'}
+              </button>
+            )}
 
-        {/* Save and exit (host only) */}
-        {isHost && (
-          <button
-            style={{
-              ...S.btn,
-              background: '#1a3a2a',
-              color:      '#2ecc71',
-              border:     '2px solid #2ecc71',
-              fontSize:   IS_MOBILE ? 28 : 15,
-            }}
-            onClick={onSave}
-          >
-            💾 {lang === 'zh' ? '儲存 / Save' : '儲存 / Save'}
-          </button>
-        )}
+            {/* Save — only when scheduled time is set */}
+            {schedDate && (
+              <>
+                {!schedIsFuture && (
+                  <div style={{ fontSize: IS_MOBILE ? 18 : 12, color: '#e74c3c', marginBottom: 8, textAlign: 'center' }}>
+                    {lang === 'zh' ? '所選時間已過期，請重新選擇' : 'Scheduled time is in the past — please pick a future time'}
+                  </div>
+                )}
+                <button
+                  disabled={!schedIsFuture}
+                  onClick={() => schedIsFuture && onSaveConfig?.({ settings, scheduledTime: schedDate, invitedUids: localInvitedUids, invitedNames: localInvitedNames })}
+                  style={{
+                    ...S.btn,
+                    ...(!schedIsFuture ? S.btnDisabled : { background: '#1a3a2a', color: '#2ecc71', border: '2px solid #2ecc71' }),
+                    fontSize: IS_MOBILE ? 28 : 15,
+                  }}
+                >
+                  💾 {lang === 'zh' ? '儲存 / Save' : '儲存 / Save'}
+                </button>
+              </>
+            )}
 
-        {/* Danger actions */}
-        {isHost ? (
-          <button
-            style={{
-              ...S.btn,
-              marginTop:  0,
-              background: 'transparent',
-              color:      '#e74c3c',
-              border:     `2px solid #e74c3c`,
-              fontSize:   IS_MOBILE ? 26 : 14,
-            }}
-            onClick={() => {
-              const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
-              if (window.confirm(msg)) onDeleteRoom?.()
-            }}
-          >
-            {lang === 'zh' ? '🗑 刪除房間' : '🗑 Delete Room'}
-          </button>
+            {/* Delete Room — always shown for host */}
+            <button
+              style={{
+                ...S.btn,
+                marginTop:  0,
+                background: 'transparent',
+                color:      '#e74c3c',
+                border:     '2px solid #e74c3c',
+                fontSize:   IS_MOBILE ? 26 : 14,
+              }}
+              onClick={() => {
+                const msg = lang === 'zh' ? '確定刪除此房間？' : 'Delete this room?'
+                if (window.confirm(msg)) onDeleteRoom?.()
+              }}
+            >
+              {lang === 'zh' ? '🗑 刪除房間' : '🗑 Delete Room'}
+            </button>
+          </>
         ) : (
-          <button
-            style={{
-              ...S.btn,
-              marginTop:  IS_MOBILE ? 10 : 6,
-              background: 'transparent',
-              color:      '#e67e22',
-              border:     `2px solid #e67e22`,
-              fontSize:   IS_MOBILE ? 26 : 14,
-            }}
-            onClick={() => {
-              const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
-              if (window.confirm(msg)) onLeaveRoom?.()
-            }}
-          >
-            {lang === 'zh' ? '← 離開房間' : '← Leave Room'}
-          </button>
+          <>
+            <div style={{ textAlign: 'center', color: '#aaa', fontSize: IS_MOBILE ? 26 : 14, padding: 12 }}>
+              {t(lang, 'waitingForPlayers')}
+            </div>
+            <button
+              style={{
+                ...S.btn,
+                marginTop:  0,
+                background: 'transparent',
+                color:      '#e67e22',
+                border:     '2px solid #e67e22',
+                fontSize:   IS_MOBILE ? 26 : 14,
+              }}
+              onClick={() => {
+                const msg = lang === 'zh' ? '確定離開此房間？' : 'Leave this room?'
+                if (window.confirm(msg)) onLeaveRoom?.()
+              }}
+            >
+              {lang === 'zh' ? '← 離開房間' : '← Leave Room'}
+            </button>
+          </>
         )}
 
         {/* Bottom padding so content clears the scroll-fade gradient */}
@@ -720,7 +705,8 @@ export default function RoomPage({
           loading={loadingUsers}
           onClose={() => setShowInviteModal(false)}
           onConfirm={(uids, names) => {
-            onSetInvitedPlayers?.(uids, names)
+            setLocalInvitedUids(uids)
+            setLocalInvitedNames(names)
             setShowInviteModal(false)
           }}
         />

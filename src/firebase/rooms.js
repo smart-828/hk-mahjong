@@ -238,6 +238,18 @@ export async function setInvitedPlayers(roomId, uids, names) {
   })
 }
 
+// Batch-save all host-configurable room fields in one Firestore write
+export async function saveRoomConfig(roomId, { settings, scheduledTime, invitedUids, invitedNames }) {
+  const data = {
+    settings,
+    invitedUids:  invitedUids  ?? [],
+    invitedNames: invitedNames ?? {},
+    updatedAt:    serverTimestamp(),
+  }
+  data.scheduledTime = scheduledTime ? Timestamp.fromDate(scheduledTime) : deleteField()
+  await updateDoc(doc(db, 'rooms', roomId), data)
+}
+
 // Fill every non-human seat with an AI player before auto-start
 export async function fillEmptySeatsWithAI(roomId) {
   const snap = await getDoc(doc(db, 'rooms', roomId))
