@@ -13,13 +13,13 @@ const WIND_LABEL = { east: 'East', south: 'South', west: 'West', north: 'North' 
 
 // Mobile detection — computed once at load time from viewport width
 const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth <= 480
-// Font scale: ~20% larger on mobile
+// Font sizes — ~35% larger on mobile, ~30% up from original desktop values
 const FS = {
-  xxs:  IS_MOBILE ? 12 : 10,
-  xs:   IS_MOBILE ? 13 : 11,
-  sm:   IS_MOBILE ? 14 : 12,
-  base: IS_MOBILE ? 17 : 14,
-  lg:   IS_MOBILE ? 18 : 15,
+  xxs:  IS_MOBILE ? 14 : 12,
+  xs:   IS_MOBILE ? 15 : 13,
+  sm:   IS_MOBILE ? 17 : 14,
+  base: IS_MOBILE ? 20 : 16,
+  lg:   IS_MOBILE ? 22 : 18,
 }
 
 // Reactive orientation detection — responds to device rotation
@@ -103,47 +103,55 @@ function FlowerGroup({ flowers, size = 'md' }) {
 
 // ── Row 1: Opponent ───────────────────────────────────────────
 
-function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor }) {
+function OpponentRow({ wind, seat, handSize, exposedMelds, flowers, isLastActor, isCurrentTurn }) {
   const name = seat?.name ?? WIND_LABEL[wind]
   return (
     <div style={{
       display:      'flex',
-      alignItems:   'flex-start',
-      gap:          8,
-      padding:      '6px 12px',
+      alignItems:   'stretch',
       background:   isLastActor ? 'rgba(212,160,23,0.07)' : C.card,
       borderBottom: `1px solid ${C.border}`,
-      borderLeft:   isLastActor ? `3px solid ${C.gold}` : '3px solid transparent',
-      minHeight:    52,
+      minHeight:    IS_MOBILE ? 60 : 52,
     }}>
-      {/* Wind badge */}
+      {/* Turn indicator — solid when active, dark otherwise */}
       <div style={{
-        width: 30, height: 30, borderRadius: 4, marginTop: 2,
-        background: isLastActor ? 'rgba(212,160,23,0.18)' : C.darker,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: FS.base, fontWeight: 700,
-        color: isLastActor ? C.gold : C.text,
+        width:      IS_MOBILE ? 7 : 5,
         flexShrink: 0,
-      }}>
-        {WIND_CHAR[wind]}
-      </div>
+        background: isCurrentTurn ? '#2ecc71' : isLastActor ? 'rgba(212,160,23,0.35)' : C.darker,
+        transition: 'background 0.2s',
+      }} />
 
-      {/* Name + hidden count */}
-      <div style={{ flexShrink: 0, paddingTop: 2 }}>
-        <div style={{ fontSize: FS.sm, color: C.text, fontWeight: 600, maxWidth: 90, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-          {name}
+      {/* Row content */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 12px 6px 10px', flex: 1 }}>
+        {/* Wind badge */}
+        <div style={{
+          width: IS_MOBILE ? 34 : 30, height: IS_MOBILE ? 34 : 30,
+          borderRadius: 4, marginTop: 2, flexShrink: 0,
+          background: isLastActor ? 'rgba(212,160,23,0.18)' : C.darker,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: FS.base, fontWeight: 700,
+          color: isLastActor ? C.gold : C.text,
+        }}>
+          {WIND_CHAR[wind]}
         </div>
-        <div style={{ fontSize: FS.xs, color: C.muted, marginTop: 1 }}>
-          🀫 × {handSize ?? 13}
-        </div>
-      </div>
 
-      {/* Exposed melds — wraps to multiple lines when long */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexWrap: 'wrap', flex: 1, paddingTop: 2 }}>
-        {(exposedMelds ?? []).map((meld, i) => (
-          <MeldGroup key={i} meld={meld} size="md" concealed />
-        ))}
-        <FlowerGroup flowers={flowers} size="md" />
+        {/* Name + hidden count */}
+        <div style={{ flexShrink: 0, paddingTop: 2 }}>
+          <div style={{ fontSize: FS.sm, color: C.text, fontWeight: 600, maxWidth: 100, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            {name}
+          </div>
+          <div style={{ fontSize: FS.xs, color: C.muted, marginTop: 1 }}>
+            🀫 × {handSize ?? 13}
+          </div>
+        </div>
+
+        {/* Exposed melds — wraps to multiple lines when long */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', flexWrap: 'wrap', flex: 1, paddingTop: 2 }}>
+          {(exposedMelds ?? []).map((meld, i) => (
+            <MeldGroup key={i} meld={meld} size="md" concealed />
+          ))}
+          <FlowerGroup flowers={flowers} size="md" />
+        </div>
       </div>
     </div>
   )
@@ -169,7 +177,7 @@ function DiscardPool({ discardPool, lastDiscard, landscape }) {
       padding:    '8px 10px',
       overflowY:  'auto',
       borderBottom: `1px solid ${C.border}`,
-      minHeight:  landscape ? 90 : 50,
+      minHeight:  landscape ? 90 : 130,  // ~2 rows of md tiles (42px each) + label + padding
     }}>
       <div style={{ fontSize: FS.xxs, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         Discard pool
@@ -270,13 +278,14 @@ function MyHand({ hand, exposedMelds, flowers, selected, onTilePointerDown, drag
 // ── Row 4: Action bar ─────────────────────────────────────────
 
 const btnBase = {
-  padding:      IS_MOBILE ? '11px 16px' : '10px 16px',
-  borderRadius: 8,
+  padding:      IS_MOBILE ? '18px 28px' : '10px 16px',
+  borderRadius: IS_MOBILE ? 14 : 8,
   border:       'none',
-  fontSize:     FS.base,
-  fontWeight:   600,
+  fontSize:     IS_MOBILE ? 22 : FS.base,
+  fontWeight:   700,
   cursor:       'pointer',
   flexShrink:   0,
+  minHeight:    IS_MOBILE ? 62 : undefined,
   transition:   'opacity 0.15s',
 }
 
@@ -341,7 +350,9 @@ function ActionBar({
 
   // ── Already submitted claim — waiting ────────────────────────
   if (phase === 'claim' && mySubmitted) {
-    const label = mySubmitted.type === 'pass' ? 'Passed 過' : `Claimed: ${mySubmitted.type}`
+    const label = mySubmitted.type === 'pass'
+      ? t(lang, 'pass')
+      : `${t(lang, 'claimResult')}: ${CLAIM_CHAR[mySubmitted.type] ?? mySubmitted.type}`
     const discardedBy2 = handState?.lastDiscard?.discardedBy
     const responded2   = SEAT_ORDER.filter(s => s !== discardedBy2 && handState?.claims?.[s]).length
     return (
@@ -375,7 +386,9 @@ function ActionBar({
     return (
       <div style={barStyle}>
         <Btn
-          label={actions.mustDrawDead ? 'Draw (Kong replacement)' : 'Draw'}
+          label={actions.mustDrawDead
+            ? (lang === 'zh' ? '摸嶺牌' : 'Draw (Kong)')
+            : t(lang, 'draw')}
           color={C.blue}
           onClick={actions.mustDrawDead ? onDrawDead : onDraw}
         />
@@ -390,13 +403,17 @@ function ActionBar({
         {/* Self-draw win / special actions */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {actions.canSelfDrawWin && (
-            <Btn label="Win 🏆" color={C.gold} onClick={onSelfDrawWin} />
+            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} color={C.gold} onClick={onSelfDrawWin} />
           )}
           {(actions.concealedKongs ?? []).map(base => (
-            <Btn key={base} label={`暗槓 ${tileBaseName(base)}`} color={C.blue} onClick={() => onConcealedKong(base)} />
+            <Btn key={base}
+              label={lang === 'zh' ? `暗槓 ${tileBaseName(base)}` : `Hidden Kong`}
+              color={C.blue} onClick={() => onConcealedKong(base)} />
           ))}
           {(actions.addedKongs ?? []).map(base => (
-            <Btn key={base} label={`加槓 ${tileBaseName(base)}`} color={C.blue} onClick={() => onAddedKong(base)} />
+            <Btn key={base}
+              label={lang === 'zh' ? `加槓 ${tileBaseName(base)}` : `+Kong ${tileBaseName(base)}`}
+              color={C.blue} onClick={() => onAddedKong(base)} />
           ))}
         </div>
 
@@ -411,7 +428,9 @@ function ActionBar({
             cursor:     selected ? 'pointer' : 'default',
           }}
         >
-          {selected ? 'Discard 打出' : 'Tap a tile to discard'}
+          {selected
+            ? t(lang, 'discard')
+            : (lang === 'zh' ? '點選一張牌出牌' : 'Tap a tile to discard')}
         </button>
       </div>
     )
@@ -448,25 +467,25 @@ function ActionBar({
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {actions.canWin && (
-            <Btn label="胡 Win 🏆" color={C.gold} onClick={() => onClaim('win')} />
+            <Btn label={lang === 'zh' ? '胡 🏆' : 'Win 🏆'} color={C.gold} onClick={() => onClaim('win')} />
           )}
           {!actions.canWin && actions.winFaan !== null && (
             <Btn
               disabled
-              label={`胡 — ${actions.winFaan}${lang === 'zh' ? '番' : ' faan'} (${lang === 'zh' ? `需${minFaan}番` : `need ${minFaan}`})`}
+              label={`${lang === 'zh' ? '胡' : 'Win'} — ${actions.winFaan}${lang === 'zh' ? '番' : ' faan'} (${lang === 'zh' ? `需${minFaan}番` : `need ${minFaan}`})`}
               color={C.gold}
               onClick={undefined}
             />
           )}
           {actions.canKong && (
-            <Btn label="Kong 槓" color={C.blue} onClick={() => onClaim('kong')} />
+            <Btn label={t(lang, 'kong')} color={C.blue} onClick={() => onClaim('kong')} />
           )}
           {actions.canPong && (
-            <Btn label="Pong 碰" color={C.blue} onClick={() => onClaim('pong')} />
+            <Btn label={t(lang, 'pong')} color={C.blue} onClick={() => onClaim('pong')} />
           )}
           {chowOptions.length > 0 && !chowOpen && (
             <Btn
-              label={chowOptions.length === 1 ? 'Chow 吃' : 'Chow 吃 ▾'}
+              label={chowOptions.length === 1 ? t(lang, 'chow') : `${t(lang, 'chow')} ▾`}
               color={C.blue}
               onClick={() => {
                 if (chowOptions.length === 1) {
@@ -479,13 +498,13 @@ function ActionBar({
               }}
             />
           )}
-          <Btn label="Pass 過" color={C.darker} onClick={onPass} />
+          <Btn label={t(lang, 'pass')} color={C.darker} onClick={onPass} />
         </div>
 
         {/* Chow option picker */}
         {chowOpen && chowOptions.length > 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, color: C.muted }}>Choose sequence:</div>
+            <div style={{ fontSize: FS.sm, color: C.muted }}>{lang === 'zh' ? '選擇序列：' : 'Choose sequence:'}</div>
             {chowOptions.map((opt, i) => (
               <button
                 key={i}
@@ -525,7 +544,7 @@ const barStyle = {
   gap:          8,
   borderTop:    `1px solid ${C.border}`,
   flexShrink:   0,
-  minHeight:    IS_MOBILE ? 72 : 64,
+  minHeight:    IS_MOBILE ? 100 : 64,
 }
 
 // ── WinOverlay ────────────────────────────────────────────────
@@ -678,35 +697,34 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
 
   return (
     <div style={{
-      position:       'fixed',
-      inset:          0,
-      zIndex:         60,
-      background:     'rgba(0,0,0,0.55)',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      pointerEvents:  'none',
+      position:      'fixed',
+      top:           '50%',
+      left:          '50%',
+      transform:     'translate(-50%, -50%)',
+      zIndex:        60,
+      pointerEvents: 'none',
     }}>
       <div style={{
         background:    C.card,
         border:        `1px solid ${C.border}`,
         borderRadius:  14,
         padding:       '16px 18px',
-        minWidth:      230,
-        maxWidth:      300,
+        minWidth:      IS_MOBILE ? 260 : 230,
+        maxWidth:      320,
         display:       'flex',
         flexDirection: 'column',
         gap:           10,
-        boxShadow:     '0 8px 32px rgba(0,0,0,0.45)',
+        boxShadow:     '0 8px 32px rgba(0,0,0,0.65)',
+        opacity:       0.96,
       }}>
         {isAllPass ? (
-          <div style={{ textAlign: 'center', color: C.muted, fontSize: 14 }}>
+          <div style={{ textAlign: 'center', color: C.muted, fontSize: FS.base }}>
             {t(lang, 'allPassed')} — {WIND_CHAR[winnerSeat]} {t(lang, 'draw')}
           </div>
         ) : (
           <>
             <div style={{
-              fontSize:      10,
+              fontSize:      FS.xxs,
               color:         C.dim,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
@@ -733,14 +751,14 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
                 }}>
                   {/* Wind badge */}
                   <div style={{
-                    width:           26,
-                    height:          26,
+                    width:           28,
+                    height:          28,
                     borderRadius:    4,
                     background:      isWinner ? 'rgba(212,160,23,0.25)' : C.darker,
                     display:         'flex',
                     alignItems:      'center',
                     justifyContent:  'center',
-                    fontSize:        13,
+                    fontSize:        FS.sm,
                     fontWeight:      700,
                     color:           isWinner ? C.gold : C.muted,
                     flexShrink:      0,
@@ -751,7 +769,7 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
                   {/* Name */}
                   <div style={{
                     flex:       1,
-                    fontSize:   13,
+                    fontSize:   FS.sm,
                     color:      isWinner ? C.text : C.muted,
                     overflow:   'hidden',
                     whiteSpace: 'nowrap',
@@ -762,7 +780,7 @@ function ClaimResultOverlay({ claimResult, room, lang }) {
 
                   {/* Claim label */}
                   <div style={{
-                    fontSize:   13,
+                    fontSize:   FS.sm,
                     fontWeight: isWinner ? 700 : 400,
                     color:      isWinner
                       ? C.gold
@@ -1082,6 +1100,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
           exposedMelds={handState?.exposedMelds?.[wind]}
           flowers={handState?.flowers?.[wind]}
           isLastActor={wind === lastActorWind}
+          isCurrentTurn={wind === handState?.currentTurn}
         />
       ))}
 
