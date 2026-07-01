@@ -10,6 +10,10 @@ import LeaderboardPage from './pages/LeaderboardPage'
 import RoomPage from './pages/RoomPage'
 import WaitingScreen from './pages/WaitingScreen'
 import GamePage from './pages/GamePage'
+import RulesPanel from './components/RulesPanel'
+
+const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth <= 480
+
 import {
   createRoom, joinRoom, claimSeat,
   setSeatToAI, updateRoomSettings, deleteRoom, leaveRoom,
@@ -31,6 +35,7 @@ export default function App() {
   const [activeGames, setActiveGames]     = useState([])
   const [roomVisKey, setRoomVisKey]       = useState(0)  // increments on page-visible to force room re-subscribe
   const [editingSettings, setEditingSettings] = useState(false)  // host viewing RoomPage from WaitingScreen
+  const [rulesOpen, setRulesOpen]         = useState(false)
 
   // Derive which wind seat the current user occupies in the current room
   const myWind = currentRoom
@@ -216,11 +221,15 @@ export default function App() {
     )
   }
 
-  // ── Room page ──────────────────────────────────────────────
+  // ── In-app pages (consolidated so ? button renders once) ──
+  const isHost        = page === 'room' && currentRoom ? currentRoom.hostUid === user.uid : false
+  const hasSchedule   = page === 'room' && currentRoom ? !!currentRoom.scheduledTime : false
+  const scheduledDate = page === 'room' && currentRoom ? currentRoom.scheduledTime?.toDate?.() ?? null : null
+
+  let pageContent
   if (page === 'room' && currentRoom) {
-    // Active game → GamePage
     if (currentRoom.status === 'playing') {
-      return (
+      pageContent = (
         <GamePage
           room={currentRoom}
           myWind={myWind}
@@ -237,15 +246,8 @@ export default function App() {
           }}
         />
       )
-    }
-
-    const isHost        = currentRoom.hostUid === user.uid
-    const hasSchedule   = !!currentRoom.scheduledTime
-    const scheduledDate = currentRoom.scheduledTime?.toDate?.() ?? null
-
-    // WaitingScreen: shown when a scheduled time is set and host isn't editing settings
-    if (hasSchedule && !editingSettings) {
-      return (
+    } else if (hasSchedule && !editingSettings) {
+      pageContent = (
         <WaitingScreen
           room={currentRoom}
           myUid={user.uid}
@@ -258,53 +260,87 @@ export default function App() {
           onStartNow={handleAutoStart}
         />
       )
+    } else {
+      pageContent = (
+        <RoomPage
+          lang={lang}
+          roomCode={currentRoom.roomCode}
+          isHost={isHost}
+          seats={currentRoom.seats}
+          myUid={user.uid}
+          settings={currentRoom.settings}
+          onClaimSeat={handleClaimSeat}
+          onSetSeatType={handleSetSeatType}
+          onDeleteRoom={handleDeleteRoom}
+          onLeaveRoom={handleLeaveRoom}
+          onBack={() => {
+            if (hasSchedule && editingSettings) {
+              setEditingSettings(false)
+            } else {
+              setCurrentRoom(null); setPage('lobby')
+            }
+          }}
+          scheduledTime={scheduledDate}
+          invitedUids={currentRoom.invitedUids ?? []}
+          invitedNames={currentRoom.invitedNames ?? {}}
+          onLoadUsers={getAllUsers}
+          onSaveConfig={handleSaveConfig}
+          onStartNow={handleStartNow}
+        />
+      )
     }
-
-    // Pre-game lobby → RoomPage
-    return (
-      <RoomPage
+  } else if (page === 'leaderboard') {
+    pageContent = <LeaderboardPage lang={lang} onBack={() => setPage('lobby')} />
+  } else {
+    pageContent = (
+      <LobbyPage
+        profile={profile}
         lang={lang}
-        roomCode={currentRoom.roomCode}
-        isHost={isHost}
-        seats={currentRoom.seats}
-        myUid={user.uid}
-        settings={currentRoom.settings}
-        onClaimSeat={handleClaimSeat}
-        onSetSeatType={handleSetSeatType}
-        onDeleteRoom={handleDeleteRoom}
-        onLeaveRoom={handleLeaveRoom}
-        onBack={() => {
-          if (hasSchedule && editingSettings) {
-            setEditingSettings(false)
-          } else {
-            setCurrentRoom(null); setPage('lobby')
-          }
-        }}
-        scheduledTime={scheduledDate}
-        invitedUids={currentRoom.invitedUids ?? []}
-        invitedNames={currentRoom.invitedNames ?? {}}
-        onLoadUsers={getAllUsers}
-        onSaveConfig={handleSaveConfig}
-        onStartNow={handleStartNow}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+        onSignOut={signOut}
+        activeGames={activeGames}
+        onOpenLeaderboard={() => setPage('leaderboard')}
       />
     )
   }
 
-  // ── Leaderboard ────────────────────────────────────────────
-  if (page === 'leaderboard') {
-    return <LeaderboardPage lang={lang} onBack={() => setPage('lobby')} />
-  }
-
-  // ── Lobby ──────────────────────────────────────────────────
   return (
-    <LobbyPage
-      profile={profile}
-      lang={lang}
-      onCreateRoom={handleCreateRoom}
-      onJoinRoom={handleJoinRoom}
-      onSignOut={signOut}
-      activeGames={activeGames}
-      onOpenLeaderboard={() => setPage('leaderboard')}
-    />
+    <>
+      {pageContent}
+
+      {/* ── Floating rules button ── */}
+      <button
+        onClick={() => setRulesOpen(true)}
+        style={{
+          position:       'fixed',
+          bottom:         IS_MOBILE ? 24 : 20,
+          left:           IS_MOBILE ? 16 : 14,
+          width:          IS_MOBILE ? 52 : 40,
+          height:         IS_MOBILE ? 52 : 40,
+          borderRadius:   '50%',
+          background:     '#16213e',
+          border:         '2px solid #4a4a7e',
+          color:          '#e8c870',
+          fontSize:       IS_MOBILE ? 22 : 16,
+          fontWeight:     700,
+          cursor:         'pointer',
+          zIndex:         1400,
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          boxShadow:      '0 2px 14px rgba(0,0,0,0.55)',
+          fontFamily:     '-apple-system, sans-serif',
+          userSelect:     'none',
+        }}
+      >
+        ?
+      </button>
+
+      {/* ── Rules panel ── */}
+      {rulesOpen && (
+        <RulesPanel lang={lang} onClose={() => setRulesOpen(false)} />
+      )}
+    </>
   )
 }
