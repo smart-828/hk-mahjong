@@ -170,10 +170,10 @@ export async function leaveRoom(roomId, wind) {
   })
 }
 
-// Subscribe to a room (real-time)
+// Subscribe to a room (real-time). Calls callback(null) when room is deleted.
 export function subscribeToRoom(roomId, callback) {
   return onSnapshot(doc(db, 'rooms', roomId), snap => {
-    if (snap.exists()) callback({ id: snap.id, ...snap.data() })
+    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null)
   })
 }
 

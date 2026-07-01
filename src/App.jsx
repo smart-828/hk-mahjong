@@ -89,7 +89,14 @@ export default function App() {
   useEffect(() => {
     if (!currentRoom?.id) return
     const unsub = subscribeToRoom(currentRoom.id, updated => {
-      setCurrentRoom(updated)
+      if (updated === null) {
+        // Room was deleted (e.g. game ended and all players navigated away)
+        setCurrentRoom(null)
+        setPage('lobby')
+        setEditingSettings(false)
+      } else {
+        setCurrentRoom(updated)
+      }
     })
     return unsub
   }, [currentRoom?.id, roomVisKey])

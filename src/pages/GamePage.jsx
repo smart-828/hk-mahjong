@@ -7,6 +7,10 @@ import MahjongTile from '../components/tiles/MahjongTile.jsx'
 import { t } from '../i18n/translations.js'
 import { tileBase, SEAT_ORDER } from '../engine/tiles.js'
 import { subscribeToChat, sendMessage } from '../firebase/chat.js'
+import {
+  initPlayAgain, submitPlayAgainVote, startNewHand, setRoomClosing,
+} from '../firebase/game.js'
+import { deleteRoom } from '../firebase/rooms.js'
 
 // ── Constants ─────────────────────────────────────────────────
 const WIND_CHAR  = { east: '東', south: '南', west: '西', north: '北' }
@@ -554,8 +558,178 @@ const barStyle = {
   minHeight:    IS_MOBILE ? 100 : 64,
 }
 
+// ── PlayAgainBox ──────────────────────────────────────────────
+function PlayAgainBox({ room, myWind, lang, secsLeft, onVote }) {
+  const zh         = lang === 'zh'
+  const votes      = room.playAgainVotes ?? {}
+  const myVote     = myWind ? votes[myWind] : null
+  const humanSeats = Object.entries(room.seats ?? {}).filter(([, s]) => s.type === 'human')
+
+  return (
+    <div style={{
+      position:       'fixed', inset: 0, zIndex: 200,
+      background:     'rgba(0,0,0,0.92)',
+      display:        'flex', alignItems: 'center', justifyContent: 'center',
+      padding:        '24px 16px',
+    }}>
+      <div style={{
+        background:    C.card,
+        border:        `1px solid ${C.border}`,
+        borderRadius:  16,
+        padding:       IS_MOBILE ? '28px 22px' : '22px 20px',
+        maxWidth:      360,
+        width:         '100%',
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           IS_MOBILE ? 16 : 12,
+        textAlign:     'center',
+      }}>
+        {/* Title */}
+        <div style={{ fontSize: IS_MOBILE ? 24 : 18, fontWeight: 800, color: C.gold }}>
+          再玩一局？{!zh && ' / Play Again?'}
+        </div>
+
+        {/* Countdown */}
+        <div style={{
+          fontSize:   IS_MOBILE ? 72 : 56,
+          fontWeight: 900,
+          lineHeight: 1,
+          color:      secsLeft <= 3 ? C.red : C.text,
+        }}>
+          {secsLeft}
+        </div>
+        <div style={{ fontSize: IS_MOBILE ? 14 : 12, color: C.muted }}>
+          {zh
+            ? `你有 ${secsLeft} 秒時間決定。`
+            : `You have ${secsLeft} seconds to decide.`}
+        </div>
+
+        {/* Per-player vote status */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: IS_MOBILE ? 7 : 5 }}>
+          {humanSeats.map(([w, s]) => {
+            const v = votes[w]
+            return (
+              <div key={w} style={{
+                display:        'flex',
+                justifyContent: 'space-between',
+                alignItems:     'center',
+                padding:        IS_MOBILE ? '8px 14px' : '5px 10px',
+                background:     C.darker,
+                borderRadius:   8,
+                fontSize:       IS_MOBILE ? FS.base : FS.sm,
+              }}>
+                <span style={{ color: C.text }}>
+                  {WIND_CHAR[w]} {s.name}{w === myWind ? (zh ? '（你）' : ' (you)') : ''}
+                </span>
+                <span style={{
+                  fontWeight: 700,
+                  fontSize:   IS_MOBILE ? 22 : 16,
+                  color: v === 'yes' ? '#2ecc71' : v === 'no' ? C.red : C.muted,
+                }}>
+                  {v === 'yes' ? '✓' : v === 'no' ? '✗' : '…'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Buttons or "voted" message */}
+        {!myVote && myWind ? (
+          <div style={{ display: 'flex', gap: IS_MOBILE ? 12 : 8 }}>
+            <button
+              onClick={() => onVote('no')}
+              style={{
+                flex:         1,
+                padding:      IS_MOBILE ? '14px 0' : '10px 0',
+                background:   'transparent',
+                border:       `2px solid ${C.red}`,
+                borderRadius: 10,
+                color:        C.red,
+                fontSize:     IS_MOBILE ? 16 : 13,
+                fontWeight:   700,
+                cursor:       'pointer',
+              }}
+            >
+              ✗ {zh ? '停止' : '停止 / Stop'}
+            </button>
+            <button
+              onClick={() => onVote('yes')}
+              style={{
+                flex:         1,
+                padding:      IS_MOBILE ? '14px 0' : '10px 0',
+                background:   '#1a4a2a',
+                border:       '2px solid #2ecc71',
+                borderRadius: 10,
+                color:        '#2ecc71',
+                fontSize:     IS_MOBILE ? 16 : 13,
+                fontWeight:   700,
+                cursor:       'pointer',
+              }}
+            >
+              ✓ {zh ? '繼續' : '繼續 / Continue'}
+            </button>
+          </div>
+        ) : (
+          <div style={{ fontSize: IS_MOBILE ? 13 : 11, color: C.muted }}>
+            {zh ? '已投票，等待其他玩家…' : 'Vote submitted. Waiting for others…'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── RoomClosingOverlay ────────────────────────────────────────
+function RoomClosingOverlay({ room, lang, secsLeft }) {
+  const zh       = lang === 'zh'
+  const votes    = room.playAgainVotes ?? {}
+  const seats    = room.seats ?? {}
+  const stopWind = Object.entries(votes).find(([, v]) => v === 'no')?.[0]
+  const stopName = stopWind ? (seats[stopWind]?.name ?? WIND_LABEL[stopWind]) : null
+
+  return (
+    <div style={{
+      position:       'fixed', inset: 0, zIndex: 200,
+      background:     'rgba(0,0,0,0.93)',
+      display:        'flex', alignItems: 'center', justifyContent: 'center',
+      padding:        '24px 16px',
+    }}>
+      <div style={{
+        background:    C.card,
+        border:        `1px solid ${C.border}`,
+        borderRadius:  16,
+        padding:       IS_MOBILE ? '32px 22px' : '24px 20px',
+        maxWidth:      340,
+        width:         '100%',
+        textAlign:     'center',
+        display:       'flex', flexDirection: 'column',
+        gap:           IS_MOBILE ? 12 : 10,
+      }}>
+        <div style={{ fontSize: IS_MOBILE ? 18 : 14, color: C.muted, lineHeight: 1.5 }}>
+          {stopName
+            ? (zh ? `${stopName} 選擇停止。` : `${stopName} has chosen to stop.`)
+            : (zh ? '時間到。' : "Time's up.")}
+        </div>
+        <div style={{
+          fontSize:   IS_MOBILE ? 68 : 52,
+          fontWeight: 900,
+          lineHeight: 1,
+          color:      secsLeft <= 3 ? C.red : C.text,
+        }}>
+          {secsLeft}
+        </div>
+        <div style={{ fontSize: IS_MOBILE ? 14 : 12, color: C.muted }}>
+          {zh
+            ? `此房間將於 ${secsLeft} 秒後關閉。`
+            : `This room will close in ${secsLeft} second${secsLeft === 1 ? '' : 's'}.`}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── WinOverlay ────────────────────────────────────────────────
-function WinOverlay({ winResult, winner, seats, scores, myWind, onBack }) {
+function WinOverlay({ winResult, winner, seats, scores, roomScores, myWind, onBack }) {
   const { faan, isLimit, fanList, basePoints, payments, selfDraw, discarderSeat, winningTile } = winResult
   const winnerName = seats?.[winner]?.name ?? WIND_LABEL[winner] ?? winner
   const isMe       = winner === myWind
@@ -633,14 +807,26 @@ function WinOverlay({ winResult, winner, seats, scores, myWind, onBack }) {
         {/* Payments */}
         {payments && (
           <div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
-              Payments (base {basePoints} pts)
+            <div style={{
+              display:        'flex',
+              justifyContent: 'space-between',
+              fontSize:       11,
+              color:          C.muted,
+              marginBottom:   5,
+              padding:        '0 0 4px',
+              borderBottom:   `1px solid ${C.border}`,
+            }}>
+              <span>Payments (base {basePoints} pts)</span>
+              <span style={{ display: 'flex', gap: 28 }}>
+                <span>This hand</span>
+                <span>Total</span>
+              </span>
             </div>
             {SEAT_ORDER.map(w => {
-              const amt    = payments[w] ?? 0
-              const isWin  = amt > 0
-              const label  = seats?.[w]?.name ?? WIND_LABEL[w] ?? w
-              const runScore = scores?.[w] ?? 0
+              const amt   = payments[w] ?? 0
+              const isWin = amt > 0
+              const label = seats?.[w]?.name ?? WIND_LABEL[w] ?? w
+              const total = (roomScores?.[w] ?? 0) + (scores?.[w] ?? 0)
               return (
                 <div key={w} style={{
                   display:        'flex',
@@ -653,12 +839,12 @@ function WinOverlay({ winResult, winner, seats, scores, myWind, onBack }) {
                   fontWeight:     w === winner ? 700 : 400,
                 }}>
                   <span>{WIND_CHAR[w]} {label}{w === myWind ? ' (you)' : ''}</span>
-                  <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <span style={{ color: isWin ? '#2ecc71' : C.red, minWidth: 40, textAlign: 'right' }}>
+                  <span style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                    <span style={{ color: isWin ? '#2ecc71' : C.red, minWidth: 36, textAlign: 'right' }}>
                       {isWin ? `+${amt}` : amt}
                     </span>
-                    <span style={{ color: C.muted, fontSize: 12, minWidth: 40, textAlign: 'right' }}>
-                      {runScore}
+                    <span style={{ color: C.muted, fontSize: 12, minWidth: 36, textAlign: 'right' }}>
+                      {total >= 0 ? `+${total}` : total}
                     </span>
                   </span>
                 </div>
@@ -950,10 +1136,13 @@ function ChatDrawer({ messages, myWind, myName, lang, onClose, onSend }) {
 // ── GamePage ──────────────────────────────────────────────────
 
 export default function GamePage({ room, myWind, game, lang, onBack }) {
-  const [selected, setSelected]   = useState(null)
-  const [chatOpen, setChatOpen]   = useState(false)
-  const [chatMsgs, setChatMsgs]   = useState([])
-  const [unread, setUnread]       = useState(0)
+  const [selected, setSelected]       = useState(null)
+  const [chatOpen, setChatOpen]       = useState(false)
+  const [chatMsgs, setChatMsgs]       = useState([])
+  const [unread, setUnread]           = useState(0)
+  const [showVoteBox, setShowVoteBox]     = useState(false)
+  const [voteSecsLeft, setVoteSecsLeft]   = useState(null)
+  const [closeSecsLeft, setCloseSecsLeft] = useState(null)
   const chatOpenRef  = useRef(false)
   const prevCountRef = useRef(0)
   const landscape = useOrientation()
@@ -995,6 +1184,71 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
 
   const handState  = room.hand
   const opponents  = SEAT_ORDER.filter(w => w !== myWind)
+
+  // ── Play-again effects ────────────────────────────────────────
+
+  // 1. Initialise play-again vote window when phase becomes finished/exhausted
+  useEffect(() => {
+    const phase = handState?.phase
+    if (phase !== 'finished' && phase !== 'exhausted') return
+    if (room?.playAgainDeadline || room?.closingAt) return
+    initPlayAgain(room.id).catch(console.error)
+  }, [handState?.phase, room?.playAgainDeadline, room?.closingAt])
+
+  // 2. Show vote box 3 s after deadline is set (synchronised via deadline timestamp)
+  useEffect(() => {
+    const dl = room?.playAgainDeadline?.toDate?.()
+    if (!dl) { setShowVoteBox(false); return }
+    const showAt  = dl.getTime() - 10_000   // vote box shows for last 10s of deadline
+    const delayMs = Math.max(0, showAt - Date.now())
+    const t = setTimeout(() => setShowVoteBox(true), delayMs)
+    return () => clearTimeout(t)
+  }, [room?.playAgainDeadline])
+
+  // 3. Vote countdown timer (drives the number displayed in PlayAgainBox)
+  useEffect(() => {
+    const dl = room?.playAgainDeadline?.toDate?.()
+    if (!dl) { setVoteSecsLeft(null); return }
+    const tick = () => setVoteSecsLeft(Math.max(0, Math.ceil((dl - Date.now()) / 1000)))
+    tick()
+    const id = setInterval(tick, 250)
+    return () => clearInterval(id)
+  }, [room?.playAgainDeadline])
+
+  // 4. Close countdown timer
+  useEffect(() => {
+    const ca = room?.closingAt?.toDate?.()
+    if (!ca) { setCloseSecsLeft(null); return }
+    const tick = () => setCloseSecsLeft(Math.max(0, Math.ceil((ca - Date.now()) / 1000)))
+    tick()
+    const id = setInterval(tick, 250)
+    return () => clearInterval(id)
+  }, [room?.closingAt])
+
+  // 5. Resolve vote: all-yes → new hand; any-no → start closing
+  useEffect(() => {
+    const votes = room?.playAgainVotes
+    if (!votes || !room?.playAgainDeadline) return
+    const hw     = Object.entries(room.seats ?? {}).filter(([, s]) => s.type === 'human').map(([w]) => w)
+    const allYes = hw.length > 0 && hw.every(w => votes[w] === 'yes')
+    const anyNo  = hw.some(w => votes[w] === 'no')
+    if (allYes)      startNewHand(room.id).catch(console.error)
+    else if (anyNo)  setRoomClosing(room.id).catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.playAgainVotes?.east, room?.playAgainVotes?.south,
+      room?.playAgainVotes?.west, room?.playAgainVotes?.north])
+
+  // 6. Timeout: vote countdown hit 0 → start closing
+  useEffect(() => {
+    if (voteSecsLeft !== 0 || !room?.playAgainDeadline) return
+    setRoomClosing(room.id).catch(console.error)
+  }, [voteSecsLeft])
+
+  // 7. Close countdown hit 0 → delete room (subscription null triggers lobby nav in App.jsx)
+  useEffect(() => {
+    if (closeSecsLeft !== 0 || closeSecsLeft === null || !room?.closingAt) return
+    deleteRoom(room.id).catch(console.error)
+  }, [closeSecsLeft])
 
   // ── Tile order (persisted to localStorage) ────────────────────
   const lsKey = `hkm_order_${room.id}_${myWind}`
@@ -1343,6 +1597,7 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
           winner={handState.winner}
           seats={room.seats}
           scores={room.game?.scores}
+          roomScores={room.roomScores}
           myWind={myWind}
           onBack={onBack}
         />
@@ -1354,19 +1609,33 @@ export default function GamePage({ room, myWind, game, lang, onBack }) {
           position:   'fixed', inset: 0, zIndex: 100,
           background: 'rgba(0,0,0,0.82)',
           display:    'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 20,
+          alignItems: 'center', justifyContent: 'center', gap: 16,
         }}>
-          <div style={{ color: C.muted, fontSize: 22, fontWeight: 700 }}>摸牌 Draw Game</div>
-          <div style={{ color: C.muted, fontSize: 14 }}>Wall exhausted — no winner</div>
-          <button
-            onClick={onBack}
-            style={{
-              marginTop: 12, padding: '10px 28px',
-              background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 8, color: C.text, fontSize: 15, cursor: 'pointer',
-            }}
-          >Back to Lobby</button>
+          <div style={{ color: C.muted, fontSize: IS_MOBILE ? 26 : 20, fontWeight: 700 }}>摸牌 Draw Game</div>
+          <div style={{ color: C.muted, fontSize: IS_MOBILE ? 16 : 13 }}>
+            {lang === 'zh' ? '牌牆耗盡，無人糊牌。' : 'Wall exhausted — no winner.'}
+          </div>
         </div>
+      )}
+
+      {/* ── Play Again vote box ──────────────────────────────── */}
+      {showVoteBox && room?.playAgainDeadline && !room?.closingAt && (
+        <PlayAgainBox
+          room={room}
+          myWind={myWind}
+          lang={lang}
+          secsLeft={voteSecsLeft ?? 0}
+          onVote={vote => submitPlayAgainVote(room.id, myWind, vote).catch(console.error)}
+        />
+      )}
+
+      {/* ── Room closing countdown ───────────────────────────── */}
+      {room?.closingAt && (
+        <RoomClosingOverlay
+          room={room}
+          lang={lang}
+          secsLeft={closeSecsLeft ?? 10}
+        />
       )}
 
       {/* ── Claim result overlay (auto-dismisses after 3 s) ── */}

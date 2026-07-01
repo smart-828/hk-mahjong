@@ -4,7 +4,7 @@
 import {
   doc, getDoc, getDocFromServer, setDoc, updateDoc,
   runTransaction, onSnapshot,
-  serverTimestamp, increment,
+  serverTimestamp, increment, Timestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from './config'
 import {
@@ -52,7 +52,9 @@ export async function startGame(roomId) {
   )
 
   await updateDoc(doc(db, 'rooms', roomId), {
-    status: 'playing',
+    status:     'playing',
+    handNumber: 1,
+    roomScores: { east: 0, south: 0, west: 0, north: 0 },
     game: {
       dealer,
       prevailingWind: 'east',
@@ -864,6 +866,118 @@ export async function recordWinScores(roomId) {
         gamesPlayed: increment(1),
       }, { merge: true })
     }
+  })
+}
+
+// ── Play-again flow ───────────────────────────────────────────
+
+// Call once when hand.phase becomes 'finished' or 'exhausted'.
+// Sets up the 13-second vote window (3s win-screen + 10s vote).
+// Idempotent via transaction guard.
+export async function initPlayAgain(roomId) {
+  return runTransaction(db, async tx => {
+    const roomRef = doc(db, 'rooms', roomId)
+    const snap    = await tx.get(roomRef)
+    if (!snap.exists()) return
+    const room = snap.data()
+    if (room.playAgainDeadline || room.closingAt) return
+    const phase = room.hand?.phase
+    if (phase !== 'finished' && phase !== 'exhausted') return
+
+    tx.update(roomRef, {
+      playAgainVotes:    { east: null, south: null, west: null, north: null },
+      playAgainDeadline: Timestamp.fromDate(new Date(Date.now() + 13_000)),
+      updatedAt:         serverTimestamp(),
+    })
+  })
+}
+
+// Record a human player's yes/no vote.
+export async function submitPlayAgainVote(roomId, wind, vote) {
+  await updateDoc(doc(db, 'rooms', roomId), {
+    [`playAgainVotes.${wind}`]: vote,
+    updatedAt:                  serverTimestamp(),
+  })
+}
+
+// Start a new hand when all human players voted yes.
+// Rotates dealer, accumulates roomScores, resets hand state.
+// Idempotent: no-ops if playAgainDeadline already cleared.
+export async function startNewHand(roomId) {
+  return runTransaction(db, async tx => {
+    const roomRef = doc(db, 'rooms', roomId)
+    const snap    = await tx.get(roomRef)
+    if (!snap.exists()) return
+    const room = snap.data()
+    if (!room.playAgainDeadline) return   // already resolved
+
+    const DEALER_ROT = { east: 'south', south: 'west', west: 'north', north: 'east' }
+    const dealer = DEALER_ROT[room.game?.dealer ?? 'east'] ?? 'east'
+    const state  = dealHand(dealer)
+
+    const handScores     = room.game?.scores ?? { east: 0, south: 0, west: 0, north: 0 }
+    const prevRoomScores = room.roomScores    ?? { east: 0, south: 0, west: 0, north: 0 }
+    const newRoomScores  = {}
+    for (const w of SEAT_ORDER) newRoomScores[w] = (prevRoomScores[w] ?? 0) + (handScores[w] ?? 0)
+
+    tx.update(roomRef, {
+      status:            'playing',
+      handNumber:        (room.handNumber ?? 1) + 1,
+      roomScores:        newRoomScores,
+      playAgainVotes:    deleteField(),
+      playAgainDeadline: deleteField(),
+      closingAt:         deleteField(),
+      game: {
+        dealer,
+        prevailingWind: room.game?.prevailingWind ?? 'east',
+        handsPlayed:    (room.game?.handsPlayed ?? 0) + 1,
+        scores:         { east: 0, south: 0, west: 0, north: 0 },
+      },
+      hand: {
+        dealer,
+        wall:          state.wall,
+        deadWall:      state.deadWall,
+        discardPool:   [],
+        lastDiscard:   null,
+        currentTurn:   dealer,
+        phase:         'discard',
+        claimDeadline: null,
+        claims:        {},
+        flowers:       state.flowers,
+        exposedMelds:  { east: [], south: [], west: [], north: [] },
+        handSizes: {
+          east:  state.hands.east.length,
+          south: state.hands.south.length,
+          west:  state.hands.west.length,
+          north: state.hands.north.length,
+        },
+        tilesLeft: state.wall.length,
+      },
+      updatedAt: serverTimestamp(),
+    })
+
+    for (const wind of SEAT_ORDER) {
+      tx.set(handRef(roomId, wind), { hand: state.hands[wind], exposedMelds: [] })
+    }
+  })
+}
+
+// Transition room to closing phase (triggered by 'no' vote or timeout).
+// Keeps playAgainVotes intact so UI can show who stopped the game.
+export async function setRoomClosing(roomId) {
+  return runTransaction(db, async tx => {
+    const roomRef = doc(db, 'rooms', roomId)
+    const snap    = await tx.get(roomRef)
+    if (!snap.exists()) return
+    const room = snap.data()
+    if (room.closingAt)         return   // already set
+    if (!room.playAgainDeadline) return  // already resolved another way
+
+    tx.update(roomRef, {
+      playAgainDeadline: deleteField(),
+      closingAt:         Timestamp.fromDate(new Date(Date.now() + 10_000)),
+      updatedAt:         serverTimestamp(),
+    })
   })
 }
 
